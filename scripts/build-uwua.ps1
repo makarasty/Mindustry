@@ -53,10 +53,6 @@ function Ok  ($m){ Write-Host "[OK] $m" -ForegroundColor Green }
 function Warn($m){ Write-Host "[!] $m" -ForegroundColor Yellow }
 function Die ($m){ Write-Host "[FAIL] $m" -ForegroundColor Red; exit 1 }
 
-function Git { param([string]$Repo,[Parameter(ValueFromRemainingArguments=$true)]$A)
-    & git -C $Repo @A
-}
-
 # read the submodule base commit recorded in the parent repo tree
 function Get-Pin($path){
     $line = & git -C $Root ls-tree HEAD $path
