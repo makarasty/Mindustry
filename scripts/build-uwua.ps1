@@ -104,10 +104,15 @@ if(-not (Test-Path $Arc)) { Die "Arc submodule missing: $Arc" }
 
 # ---------------------------------------------------------------- 1. pull
 if($Pull){
-    Info "pull: fast-forward parent repo to origin/main"
+    Info "pull: rebase parent repo onto origin/main"
     & git -C $Root checkout -- assets/mod.hjson 2>$null   # drop spurious CRLF-only change
-    & git -C $Root pull --ff-only
-    if($LASTEXITCODE -ne 0){ Die "git pull --ff-only failed (diverged? commit/stash local work first)" }
+    # --rebase replays local commits (e.g. tooling) on top of upstream; --autostash
+    # tucks a dirty tree. Survives having local commits main is ahead by (unlike --ff-only).
+    & git -C $Root pull --rebase --autostash origin main
+    if($LASTEXITCODE -ne 0){
+        & git -C $Root rebase --abort 2>$null
+        Die "git pull --rebase failed (conflict with local commits). Resolve manually, then re-run."
+    }
     Ok "parent at $(& git -C $Root rev-parse --short HEAD)"
 } else {
     Warn "no -Pull: building current checkout (not fetching latest)"
