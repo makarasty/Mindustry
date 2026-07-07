@@ -1,0 +1,19 @@
+diff --git a/core/src/mindustry/net/NetworkIO.java b/core/src/mindustry/net/NetworkIO.java
+index 082a174b79..f63d01bb2c 100644
+--- a/core/src/mindustry/net/NetworkIO.java
++++ b/core/src/mindustry/net/NetworkIO.java
+@@ -128,12 +128,12 @@ public class NetworkIO{
+         buffer.putInt(Core.settings.getInt("totalPlayers", Groups.player.size()));
+         buffer.putInt(state.wave);
+         buffer.putInt(Version.build);
+-        writeString(buffer, "MindustryX");
++        writeString(buffer, "UwUA");
+ 
+         buffer.put((byte)state.rules.mode().ordinal());
+         buffer.putInt(netServer.admins.getPlayerLimit());
+ 
+-        writeString(buffer, description, 100);
++        writeString(buffer, description, 300);
+         writeString(buffer, state.rules.modeName == null ? "" : state.rules.modeName, 50);
+         buffer.putShort((short)Core.settings.getInt("port", port));
+         return buffer;
