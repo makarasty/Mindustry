@@ -3,7 +3,32 @@
 Документация процесса: какие правки вносятся вручную перед компиляцией сервера
 MindustryX и как собрать актуальную версию.
 
-> Обновлено: 2026-07-07. upstreamBuild `158` / minGameVersion `158.1`.
+> Обновлено: 2026-07-08. Игра `v159.2` (work pin `114db448`, Arc pin `12840e4a21`).
+
+---
+
+## 0.1. Как обновляется версия игры (важно!)
+
+Ветка `main` этого репо — **обёртка**, а не исходник. Версию игры задаёт
+**пин submodule `work`** (коммит Anuken/Mindustry). Новую версию апстрим катит
+коммитом вида `Update HEAD -> vXXX(<work-commit>)` на **`upstream/main`
+(TinyLake/MindustryX)** — он бампает пины `work`/`Arc`, `upstreamBuild`, patches.
+
+Почему «просто pull» НЕ давал latest:
+- build-скрипт тянул из **`origin`** (твой форк `makarasty/Mindustry`), который
+  отстаёт. Новые версии (v159.1, v159.2, …) прилетают на **`upstream/main`**.
+- обычный `git pull` двигает только патчи/скрипты; версию игры двигает только
+  коммит-бамп пина.
+
+**Исправлено:** `-Pull` теперь `git fetch upstream` + `git merge upstream/main`
+→ подтягивает новый пин + свежие патчи, сохраняя твои коммиты. Скрипт читает пин
+динамически (`git ls-tree HEAD work`), поэтому собирает ту версию, что в дереве.
+Если пин ещё не скачан в submodule — скрипт до сброса делает `git fetch`.
+
+Требуется remote `upstream` (один раз):
+```
+git remote add upstream https://github.com/TinyLake/MindustryX
+```
 
 ---
 
@@ -18,7 +43,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build-uwua.ps1 -Pull
 или просто **двойной клик** по `scripts\build-uwua.bat` (он вызывает `.ps1 -Pull`).
 
 Что делает [`scripts/build-uwua.ps1`](../scripts/build-uwua.ps1):
-1. `-Pull` — `git pull --ff-only` parent до `origin/main` (сбросив спурьёзный CRLF `mod.hjson`);
+1. `-Pull` — `git fetch upstream` + `git merge upstream/main` (последняя версия игры + патчи; см. §0.1);
 2. reset+патч **Arc** (`patches/arc/*`) → group `com.github.TinyLake.MindustryX`;
 3. reset+патч **work** (`patches/picked/*`, `patches/client/*`);
 4. применяет правки `NetworkIO.java` (`UwUA` + `300`) — **с проверкой якорей**:

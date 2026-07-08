@@ -65,8 +65,15 @@ function Get-Pin($path){
 function Patch-Repo($repo,$pin,[string[]]$globs){
     & git -C $repo am --abort 2>$null
     Info "reset $(Split-Path $repo -Leaf) -> $($pin.Substring(0,10))"
+    # fetch the pin first if it's not in the local object store (new game version)
+    & git -C $repo cat-file -e $pin 2>$null
+    if($LASTEXITCODE -ne 0){
+        Info "pin not present locally; fetching from origin"
+        & git -C $repo fetch --no-tags origin $pin 2>$null
+        if($LASTEXITCODE -ne 0){ & git -C $repo fetch --no-tags origin 2>$null }
+    }
     & git -C $repo reset --hard $pin | Out-Null
-    if($LASTEXITCODE -ne 0){ Die "reset failed for $repo" }
+    if($LASTEXITCODE -ne 0){ Die "reset failed for $repo (pin $pin unreachable - fetch failed?)" }
     $env:GIT_COMMITTER_DATE = '2024-01-01 00:00:00 +0000'
     foreach($g in $globs){
         $files = Get-ChildItem -Path $g -File -ErrorAction SilentlyContinue | Sort-Object Name
@@ -82,7 +89,7 @@ function Patch-Repo($repo,$pin,[string[]]$globs){
     Ok "$(Split-Path $repo -Leaf) patched -> $(& git -C $repo rev-parse --short HEAD)"
 }
 
-# idempotent literal replacement with an upstream-anchor gate (no regex — exact strings)
+# idempotent literal replacement with an upstream-anchor gate (no regex, exact strings)
 function Replace-Or-Gate([ref]$text,$oldLit,$newLit,$what){
     if($text.Value.Contains($newLit)){ Ok "$what already applied"; return }
     if($text.Value.Contains($oldLit)){
@@ -100,16 +107,25 @@ if(-not (Test-Path $Arc)) { Die "Arc submodule missing: $Arc" }
 
 # ---------------------------------------------------------------- 1. pull
 if($Pull){
-    Info "pull: rebase parent repo onto origin/main"
+    # New game versions (v158 -> v159 -> ...) land as "Update HEAD -> vXXX" commits on
+    # TinyLake/MindustryX 'main' (the 'upstream' remote), which bump the work/Arc submodule
+    # pins. origin (your fork) lags, so pulling origin never advances the GAME version.
+    # Fetch upstream and merge its main -> brings the new pin + refreshed patches, keeps
+    # your local tooling commits. Falls back to origin if no 'upstream' remote.
+    $Remote = 'upstream'
+    & git -C $Root remote get-url $Remote *> $null
+    if($LASTEXITCODE -ne 0){ Warn "no '$Remote' remote (add: git remote add upstream https://github.com/TinyLake/MindustryX); using origin"; $Remote = 'origin' }
+    Info "pull: fetch $Remote, merge $Remote/main (latest MindustryX)"
     & git -C $Root checkout -- assets/mod.hjson 2>$null   # drop spurious CRLF-only change
-    # --rebase replays local commits (e.g. tooling) on top of upstream; --autostash
-    # tucks a dirty tree. Survives having local commits main is ahead by (unlike --ff-only).
-    & git -C $Root pull --rebase --autostash origin main
+    & git -C $Root fetch $Remote
+    if($LASTEXITCODE -ne 0){ Die "git fetch $Remote failed (network?)" }
+    & git -C $Root merge --no-edit --no-gpg-sign "$Remote/main"
     if($LASTEXITCODE -ne 0){
-        & git -C $Root rebase --abort 2>$null
-        Die "git pull --rebase failed (conflict with local commits). Resolve manually, then re-run."
+        & git -C $Root merge --abort 2>$null
+        Die "merge $Remote/main failed (conflict with local changes). Resolve manually, then re-run."
     }
-    Ok "parent at $(& git -C $Root rev-parse --short HEAD)"
+    $gv = (Get-Content -Raw (Join-Path $Root 'assets/mod.hjson') | Select-String -Pattern 'minGameVersion:\s*"([^"]+)"').Matches.Groups[1].Value
+    Ok "parent at $(& git -C $Root rev-parse --short HEAD)  (game v$gv)"
 } else {
     Warn "no -Pull: building current checkout (not fetching latest)"
 }
