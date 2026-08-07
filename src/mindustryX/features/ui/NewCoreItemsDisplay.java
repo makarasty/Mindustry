@@ -14,6 +14,7 @@ import mindustry.core.*;
 import mindustry.entities.*;
 import mindustry.entities.units.*;
 import mindustry.game.EventType.*;
+import mindustry.game.*;
 import mindustry.gen.*;
 import mindustry.graphics.*;
 import mindustry.type.*;
@@ -22,6 +23,7 @@ import mindustry.world.*;
 import mindustry.world.blocks.ConstructBlock.*;
 import mindustry.world.blocks.power.*;
 import mindustry.world.blocks.storage.*;
+import mindustry.world.modules.*;
 import mindustryX.features.*;
 import mindustryX.features.SettingsV2.*;
 import mindustryX.features.ShareFeature.*;
@@ -40,12 +42,12 @@ public class NewCoreItemsDisplay extends Table{
 
     private static final Interval timer = new Interval(2);
 
-    private final int[] itemDelta;
-    private final int[] lastItemAmount;
+    private final ItemModule itemDelta = new ItemModule();
+    private final ItemModule lastItemAmount = new ItemModule();
     public final ObjectSet<Item> usedItems = new ObjectSet<>();
     public final ObjectSet<UnitType> usedUnits = new ObjectSet<>();
 
-    private final ItemSeq planItems = new ItemSeq();
+    private final ItemModule planItemAmounts = new ItemModule();
     private final ObjectIntMap<Block> planCounter = new ObjectIntMap<>();
 
     private final SettingsV2.Data<Boolean> showItem = new CheckPref("coreItems.showItem", true);
@@ -55,14 +57,25 @@ public class NewCoreItemsDisplay extends Table{
     public final List<Data<?>> settings = CollectionsKt.listOf(showItem, showUnit, showPlan, showPower);
 
     public NewCoreItemsDisplay(){
-        itemDelta = new int[content.items().size];
-        lastItemAmount = new int[content.items().size];
         Events.on(ResetEvent.class, e -> {
             usedItems.clear();
             usedUnits.clear();
-            Arrays.fill(itemDelta, 0);
-            Arrays.fill(lastItemAmount, 0);
+            itemDelta.clear();
+            lastItemAmount.clear();
             plansTable.clearChildren();
+        });
+
+        Events.on(WorldLoadEvent.class, e -> {
+            int size = content.items().size;
+            ItemModule.empty.checkArrayCapacity(size);//Fix ItemModule.empty, used by team.item()
+            planItemAmounts.checkArrayCapacity(size);
+            itemDelta.checkArrayCapacity(size);
+            lastItemAmount.checkArrayCapacity(size);
+
+            itemsTable.clearChildren();
+            unitsTable.clearChildren();
+            buildItems();
+            buildUnits();
         });
 
         setup();
@@ -151,7 +164,7 @@ public class NewCoreItemsDisplay extends Table{
     }
 
     public TeamItemInfo itemInfo(Item item){
-        return new TeamItemInfo(lastItemAmount[item.id], itemDelta[item.id]);
+        return new TeamItemInfo(lastItemAmount.get(item), itemDelta.get(item));
     }
 
     private void updateItemMeans(){
@@ -160,9 +173,9 @@ public class NewCoreItemsDisplay extends Table{
         for(Item item : usedItems){
             short id = item.id;
             int coreAmount = items.get(id);
-            int lastAmount = lastItemAmount[id];
-            itemDelta[id] = coreAmount - lastAmount;
-            lastItemAmount[id] = coreAmount;
+            int lastAmount = lastItemAmount.get(item);
+            itemDelta.set(item, coreAmount - lastAmount);
+            lastItemAmount.set(item, coreAmount);
         }
     }
 
@@ -180,7 +193,7 @@ public class NewCoreItemsDisplay extends Table{
                 .tooltip(tooltip -> tooltip.background(Styles.black6).margin(4f).add(item.localizedName).style(Styles.outlineLabel))
                 ),
                 new Table(t -> t.label(() -> {
-                    int update = itemDelta[item.id];
+                    int update = itemDelta.get(item);
                     if(update == 0) return "";
                     return (update < 0 ? "[red]" : "[green]+") + UI.formatAmount(update);
                 }).fontScale(0.85f)).top().left()
@@ -194,7 +207,7 @@ public class NewCoreItemsDisplay extends Table{
                 var planLabel = right.add("").fontScale(0.6f).height(0.01f);
 
                 amountTable.update(() -> {
-                    int planAmount = planItems.get(item);
+                    int planAmount = planItemAmounts.get(item);
                     int amount = player.team().items().get(item);
 
                     float newFontScale = 1f;
@@ -242,7 +255,7 @@ public class NewCoreItemsDisplay extends Table{
     }
 
     private void rebuildPlans(){
-        planItems.clear();
+        planItemAmounts.clear();
         planCounter.clear();
 
         allPlans.addAll(control.input.linePlans);
@@ -258,6 +271,12 @@ public class NewCoreItemsDisplay extends Table{
 
             if(block == null || block instanceof CoreBlock) continue;
 
+            // BuilderComp#updateBuildLogic
+            Tile tile = plan.tile();
+            if(tile == null || tile.team() == Team.derelict && tile.block() == block && tile.build != null && tile.block().allowDerelictRepair && state.rules.derelictRepair){
+                continue;
+            }
+
             if(plan.build() instanceof ConstructBuild build){
                 block = build.current;
             }
@@ -267,7 +286,7 @@ public class NewCoreItemsDisplay extends Table{
             for(ItemStack stack : block.requirements){
                 int planAmount = (int)(plan.breaking ? -state.rules.buildCostMultiplier * state.rules.deconstructRefundMultiplier * stack.amount * plan.progress
                 : state.rules.buildCostMultiplier * stack.amount * (1 - plan.progress));
-                planItems.add(stack.item, planAmount);
+                planItemAmounts.add(stack.item, planAmount);
             }
         }
         allPlans.clear();

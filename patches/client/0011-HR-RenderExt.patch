@@ -4,10 +4,11 @@ Date: Tue, 26 Mar 2024 19:22:00 +0800
 Subject: [PATCH] HR: RenderExt
 
 ---
- core/src/mindustry/core/Renderer.java          | 3 ++-
- core/src/mindustry/graphics/BlockRenderer.java | 3 ++-
- core/src/mindustry/input/InputHandler.java     | 5 +++++
- 3 files changed, 9 insertions(+), 2 deletions(-)
+ core/src/mindustry/core/Renderer.java            | 3 ++-
+ core/src/mindustry/graphics/BlockRenderer.java   | 4 ++++
+ core/src/mindustry/graphics/OverlayRenderer.java | 3 ++-
+ core/src/mindustry/input/InputHandler.java       | 5 +++++
+ 4 files changed, 13 insertions(+), 2 deletions(-)
 
 diff --git a/core/src/mindustry/core/Renderer.java b/core/src/mindustry/core/Renderer.java
 index 389684d7bb658688334d062df2cd3d9d7685ecf9..f25585b53208318e2b09c227e94915bf291b941e 100644
@@ -31,10 +32,10 @@ index 389684d7bb658688334d062df2cd3d9d7685ecf9..f25585b53208318e2b09c227e94915bf
          if(settings.getBool("drawhitboxes")){
              DebugCollisionRenderer.draw();
 diff --git a/core/src/mindustry/graphics/BlockRenderer.java b/core/src/mindustry/graphics/BlockRenderer.java
-index 2f9daf5931c006e5696a0a46e2f537071d1c4a1b..1a60d811c0d59092217dabf4f8c55206f2340485 100644
+index e645413bd928ebab24464ce5f6c1674ed27401da..f27e4b5e2c22b69967f73f9b4fa940c643804d76 100644
 --- a/core/src/mindustry/graphics/BlockRenderer.java
 +++ b/core/src/mindustry/graphics/BlockRenderer.java
-@@ -20,6 +20,7 @@ import mindustry.world.*;
+@@ -19,6 +19,7 @@ import mindustry.world.*;
  import mindustry.world.blocks.environment.*;
  import mindustry.world.blocks.environment.Floor.*;
  import mindustry.world.blocks.power.*;
@@ -42,20 +43,49 @@ index 2f9daf5931c006e5696a0a46e2f537071d1c4a1b..1a60d811c0d59092217dabf4f8c55206
  
  import java.util.*;
  
-@@ -724,7 +725,7 @@ public class BlockRenderer{
- 
+@@ -725,6 +726,7 @@ public class BlockRenderer{
              if(block != Blocks.air && (visible || build.wasVisible)){
                  SpriteBatch.totalDrawCalls = 0;
--                block.drawBase(tile);
-+                RenderExt.onBlockDraw(tile, block, build);
+                 block.drawBase(tile);
++                RenderExt.drawBlockOverlays(tile, block, build);
                  Draw.reset();
                  Draw.z(Layer.block);
  
+@@ -805,6 +807,8 @@ public class BlockRenderer{
+             boolean visible = !build.inFogTo(pteam);
+ 
+             if(visible || build.wasVisible){
++                RenderExt.drawBlockOverlays(build.tile, build.block, build);
++
+                 if(visible){
+                     build.visibleFlags |= (1L << pteam.id);
+                     if(!build.wasVisible){
+diff --git a/core/src/mindustry/graphics/OverlayRenderer.java b/core/src/mindustry/graphics/OverlayRenderer.java
+index 0795b6a38f43c33ae3fae877f1ae54dd79ea0949..9d1f4b1ebf944b4dac80b78954ff0719669fb1ed 100644
+--- a/core/src/mindustry/graphics/OverlayRenderer.java
++++ b/core/src/mindustry/graphics/OverlayRenderer.java
+@@ -17,6 +17,7 @@ import mindustry.gen.*;
+ import mindustry.input.*;
+ import mindustry.world.*;
+ import mindustry.world.blocks.storage.CoreBlock.*;
++import mindustryX.features.*;
+ 
+ import static mindustry.Vars.*;
+ 
+@@ -217,7 +218,7 @@ public class OverlayRenderer{
+             Building build = world.buildWorld(vec.x, vec.y);
+ 
+             if(build != null && build.team == player.team()){
+-                build.drawSelect();
++                RenderExt.onDrawSelect(build);
+                 if(!build.enabled && build.block.drawDisabled){
+                    build.drawDisabled();
+                 }
 diff --git a/core/src/mindustry/input/InputHandler.java b/core/src/mindustry/input/InputHandler.java
-index 5bc3c64a44247b45c77020bd8ba4a2bfddbc8ea8..b4b3ce4c5e021f9100bf59400fe9ea137b2b31c7 100644
+index a9d818c129b9b3e817d89c81c0ba0ac360d7dcdd..16da87606894814e40b8eb262f2d8fd4560250a9 100644
 --- a/core/src/mindustry/input/InputHandler.java
 +++ b/core/src/mindustry/input/InputHandler.java
-@@ -361,6 +361,11 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
+@@ -360,6 +360,11 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
                          ai.group = null;
                      }
  

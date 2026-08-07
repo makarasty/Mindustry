@@ -75,7 +75,7 @@ index 9032b4bf9bdcacd31826eb95fedc7781465cc87a..3af24a74e8322e52e3cce807b7d9d49d
  
      @Override
 diff --git a/core/src/mindustry/type/StatusEffect.java b/core/src/mindustry/type/StatusEffect.java
-index 4dd107300c6c350343de31f4775281632a724758..21da77ef9bc1e142dca8997e0c41f43cea5d2b75 100644
+index 54b7d73f58e97d100ddc410c71bd988d0ec99326..a9b984b8a2d935e4e2dd4661f46b91a7351a4b85 100644
 --- a/core/src/mindustry/type/StatusEffect.java
 +++ b/core/src/mindustry/type/StatusEffect.java
 @@ -13,6 +13,7 @@ import mindustry.gen.*;
@@ -95,7 +95,7 @@ index 4dd107300c6c350343de31f4775281632a724758..21da77ef9bc1e142dca8997e0c41f43c
          if(damage < 0) stats.add(Stat.healing, -damage * 60f, StatUnit.perSecond);
  
 diff --git a/core/src/mindustry/type/UnitType.java b/core/src/mindustry/type/UnitType.java
-index e760b55087e62a2a47b4fdebe3e6d816b8bf7b19..2b09f3f4f9fb4c4d2f013592bc3c78a8252e29b6 100644
+index 83512435d95dafeaec815b9fd3623d7a3b5db708..99332e2331aa0ad70d3ef88bd26d6b998d71a691 100644
 --- a/core/src/mindustry/type/UnitType.java
 +++ b/core/src/mindustry/type/UnitType.java
 @@ -36,6 +36,7 @@ import mindustry.world.blocks.payloads.*;
@@ -191,7 +191,7 @@ index 04723af66fdc081baf0c876f82091046c190d0eb..628a3026f563edaa238012b9100793c0
              t.row();
              t.add("[lightgray]" + Stat.inaccuracy.localized() + ": [white]" + (int)inaccuracy + " " + StatUnit.degrees.localized());
 diff --git a/core/src/mindustry/world/Block.java b/core/src/mindustry/world/Block.java
-index 50ee93dcc3e01f91d43b5c7df90e4d94229bb933..ddd688337f8639b635c81665e45f8008e930a7e6 100644
+index 75fd4d67ce8f549dedd024de25525b91826e09cc..039b49606f45d196b605e63a70c6cb7d61980383 100644
 --- a/core/src/mindustry/world/Block.java
 +++ b/core/src/mindustry/world/Block.java
 @@ -34,6 +34,7 @@ import mindustry.world.blocks.environment.*;
