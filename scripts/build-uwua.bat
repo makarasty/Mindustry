@@ -5,6 +5,8 @@ REM  Pulls latest, patches, applies UwUA/300, builds, verifies.
 REM  Pass extra flags after the file, e.g.:  build-uwua.bat -SkipPatch
 REM ==============================================================
 setlocal
+REM tells the script this window already pauses, so it must not pause twice
+set BUILD_UWUA_BAT=1
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0build-uwua.ps1" -Pull %*
 set RC=%ERRORLEVEL%
 echo.

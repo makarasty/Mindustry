@@ -42,7 +42,13 @@ $ErrorActionPreference = 'Continue'
 $Root      = Split-Path -Parent $PSScriptRoot          # repo root (scripts/..)
 $Work      = Join-Path $Root 'work'
 $Arc       = Join-Path $Root 'Arc'
-$JavaHome  = 'D:\java\graalvm-jdk-17.0.12'             # GraalVM 17
+# JDK 17 (the game compiles at source/target 17); newest *jdk-17* found wins.
+# Override with $env:MINDUSTRYX_JDK to pin a specific one.
+$JavaHome  = if($env:MINDUSTRYX_JDK){ $env:MINDUSTRYX_JDK } else {
+    (Get-ChildItem 'D:\java', 'C:\Program Files\Java', 'C:\Program Files\Eclipse Adoptium' -Directory `
+        -Filter '*jdk-17*' -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending | Select-Object -First 1).FullName
+}
 $NetIO     = 'core/src/mindustry/net/NetworkIO.java'   # relative to $Work
 $JarRel    = 'server/build/libs/server-release.jar'    # relative to $Work
 $ArcGroup  = "com.github.TinyLake.MindustryX"          # expected Arc group after patch
@@ -51,7 +57,12 @@ $ArcGroup  = "com.github.TinyLake.MindustryX"          # expected Arc group afte
 function Info($m){ Write-Host "[*] $m" -ForegroundColor Cyan }
 function Ok  ($m){ Write-Host "[OK] $m" -ForegroundColor Green }
 function Warn($m){ Write-Host "[!] $m" -ForegroundColor Yellow }
-function Die ($m){ Write-Host "[FAIL] $m" -ForegroundColor Red; exit 1 }
+function Die ($m){
+    Write-Host "[FAIL] $m" -ForegroundColor Red
+    # a double-clicked .ps1 closes its window at once; keep the reason readable
+    if(-not $env:BUILD_UWUA_BAT){ Read-Host "Press Enter to close" | Out-Null }
+    exit 1
+}
 
 # read the submodule base commit recorded in the parent repo tree
 function Get-Pin($path){
@@ -101,7 +112,10 @@ function Replace-Or-Gate([ref]$text,$oldLit,$newLit,$what){
 }
 
 # ---------------------------------------------------------------- 0. sanity
-if(-not (Test-Path (Join-Path $JavaHome 'bin\java.exe'))){ Die "JAVA_HOME not found: $JavaHome (GraalVM 17). Edit `$JavaHome in this script." }
+if(-not $JavaHome -or -not (Test-Path (Join-Path $JavaHome 'bin\java.exe'))){
+    Die "no JDK 17 found (looked for *jdk-17* under D:\java, C:\Program Files\Java, C:\Program Files\Eclipse Adoptium). Set `$env:MINDUSTRYX_JDK to one."
+}
+Ok "JDK 17: $JavaHome"
 if(-not (Test-Path $Work)){ Die "work submodule missing: $Work" }
 if(-not (Test-Path $Arc)) { Die "Arc submodule missing: $Arc" }
 
