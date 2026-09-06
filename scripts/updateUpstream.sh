@@ -2,6 +2,8 @@
 
 set -e
 
+cd "$(dirname "$0")/.." || exit 1   # every path below is relative to the repo root
+
 function getRef() {
     git ls-tree "$1" "$2" | cut -d' ' -f3 | cut -f1
 }

@@ -2,6 +2,8 @@
 
 set -e
 
+cd "$(dirname "$0")/.." || exit 1   # every path below is relative to the repo root
+
 # 定义颜色
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -130,7 +132,7 @@ echo -e "${GREEN}====== Start Patch Arc ======${NC}"
 base=$(getRef HEAD Arc)
 if [ -z "$base" ]; then echo "${RED}Error: Could not find Arc ref${NC}"; exit 1; fi
 
-cd Arc || (echo "Arc directory not found" && exit 1)
+cd Arc || { echo "Arc directory not found"; exit 1; }
 
 git_reset $base
 commit_marker "#PATCH-BASE#"
@@ -147,7 +149,7 @@ echo -e "${GREEN}====== Start Patch Work ======${NC}"
 base=$(getRef HEAD work)
 if [ -z "$base" ]; then echo "${RED}Error: Could not find work ref${NC}"; exit 1; fi
 
-cd work || (echo "work directory not found" && exit 1)
+cd work || { echo "work directory not found"; exit 1; }
 
 git_reset $base
 commit_marker "#PATCH-BASE#"
