@@ -56,7 +56,7 @@ Subject: [PATCH] FC: MindustryX Icon for android
  delete mode 100644 android/res/mipmap-xxxhdpi/ic_launcher_round.png
 
 diff --git a/android/AndroidManifest.xml b/android/AndroidManifest.xml
-index 78c3080541b186cd9c8175a409feb8a52c12126e..251e2fd347541932fd62b296a74564c8e0c879a7 100644
+index 874faea21a51e0c1ba74a706314915a2248775a3..7c76478fe49ea41e28566ceda986bdbc948c0cbe 100644
 --- a/android/AndroidManifest.xml
 +++ b/android/AndroidManifest.xml
 @@ -11,8 +11,7 @@

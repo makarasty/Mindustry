@@ -214,10 +214,10 @@ public class LogicSupport{
             t.add(LogicSupport.memoryDecimal.uiElement()).minWidth(200f).padLeft(4f);
             t.button(Icon.refresh, Styles.clearNonei, () -> {
                 vars.clearChildren();
-                buildMemoryPane(vars, build.memory);
+                buildMemoryPane(vars, build.memorySnapshot());
             });
         }).row();
-        buildMemoryPane(vars, build.memory);
+        buildMemoryPane(vars, build.memorySnapshot());
         table.pane(Styles.noBarPane, vars).touchable(Touchable.disabled).maxHeight(500f).fillX().pad(4).get().setScrollingDisabledX(true);
         vars.update(() -> {
             vars.getCells().each(cell -> {

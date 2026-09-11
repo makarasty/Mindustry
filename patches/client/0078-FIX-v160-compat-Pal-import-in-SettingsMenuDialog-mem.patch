@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: System <system@example.com>
+Date: Mon, 1 Jan 2024 00:00:00 +0000
+Subject: [PATCH] FIX: v160 compat - Pal import in SettingsMenuDialog,
+ memorySnapshot() for MemoryBuild
+
+---
+ core/src/mindustry/ui/dialogs/SettingsMenuDialog.java  | 1 +
+ core/src/mindustry/world/blocks/logic/MemoryBlock.java | 5 +++++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/core/src/mindustry/ui/dialogs/SettingsMenuDialog.java b/core/src/mindustry/ui/dialogs/SettingsMenuDialog.java
+index df644d086c837a4f9a40eb29162a56d2885d2c00..1a2cd9338a4161383e811522d5e8ecea5432c8da 100644
+--- a/core/src/mindustry/ui/dialogs/SettingsMenuDialog.java
++++ b/core/src/mindustry/ui/dialogs/SettingsMenuDialog.java
+@@ -21,6 +21,7 @@ import mindustry.core.*;
+ import mindustry.ctype.*;
+ import mindustry.game.EventType.*;
+ import mindustry.gen.*;
++import mindustry.graphics.*;
+ import mindustry.input.*;
+ import mindustry.type.*;
+ import mindustry.ui.*;
+diff --git a/core/src/mindustry/world/blocks/logic/MemoryBlock.java b/core/src/mindustry/world/blocks/logic/MemoryBlock.java
+index 2e628a8ee3d484f8a193c326970d88bd89234e22..40650eea555a36d73efa82eec9f0dded943f48c0 100644
+--- a/core/src/mindustry/world/blocks/logic/MemoryBlock.java
++++ b/core/src/mindustry/world/blocks/logic/MemoryBlock.java
+@@ -159,6 +159,11 @@ public class MemoryBlock extends Block{
+             }
+         }
+ 
++        /** MDTX: numeric memory slots, for the memory viewer. */
++        public double[] memorySnapshot(){
++            return numberMemory;
++        }
++
+         @Override
+         public boolean onConfigureBuildTapped(Building other){
+             if(this == other || !accessible()){

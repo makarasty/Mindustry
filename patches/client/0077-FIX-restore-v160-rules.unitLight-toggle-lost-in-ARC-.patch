@@ -1,0 +1,21 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: System <system@example.com>
+Date: Mon, 1 Jan 2024 00:00:00 +0000
+Subject: [PATCH] FIX: restore v160 rules.unitLight toggle lost in ARC merged
+
+---
+ core/src/mindustry/ui/dialogs/CustomRulesDialog.java | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/core/src/mindustry/ui/dialogs/CustomRulesDialog.java b/core/src/mindustry/ui/dialogs/CustomRulesDialog.java
+index 420410862bec64bebcbd29af4078c755738cac5c..00d472f53a13841e5e475317efbc2ed315da5888 100644
+--- a/core/src/mindustry/ui/dialogs/CustomRulesDialog.java
++++ b/core/src/mindustry/ui/dialogs/CustomRulesDialog.java
+@@ -235,6 +235,7 @@ public class CustomRulesDialog extends BaseDialog{
+         check("@rules.fog", b -> rules.fog = b, () -> rules.fog);
+         check("@rules.staticFog", b -> rules.staticFog = b, () -> rules.staticFog);
+         check("@rules.lighting", b -> rules.lighting = b, () -> rules.lighting);
++        check("@rules.lighting.unitlight", b -> rules.unitLight = b, () -> rules.unitLight);
+ 
+         check("@rules.limitarea", b -> rules.limitMapArea = b, () -> rules.limitMapArea, () -> !state.isGame());
+         numberi("x", x -> rules.limitX = x, () -> rules.limitX, () -> rules.limitMapArea && !state.isGame(), 0, 10000);
