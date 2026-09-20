@@ -40,7 +40,7 @@ index 0d7de460ff6c67b760a28429027c8b8d19f5d55b..f19bb5a81421c9968f855097ece84ac5
  
          }
 diff --git a/core/src/mindustry/editor/MapEditor.java b/core/src/mindustry/editor/MapEditor.java
-index 2187b57045a1402424f4e4ca4e19040775b94803..f0afd6f8f766602bcef90863fb5946ecf8133ee7 100644
+index e97bfbaadce5c49ce195d856bd7f726a39178855..f4f9b0272ac6163c6819d7a17dd7af54948ecb3c 100644
 --- a/core/src/mindustry/editor/MapEditor.java
 +++ b/core/src/mindustry/editor/MapEditor.java
 @@ -29,7 +29,9 @@ public class MapEditor{
@@ -53,7 +53,7 @@ index 2187b57045a1402424f4e4ca4e19040775b94803..f0afd6f8f766602bcef90863fb5946ec
      public Block drawBlock = Blocks.stone;
      public Team drawTeam = Team.sharded;
      public boolean showTerrain = true, showFloor = true, showBuildings = true;
-@@ -287,9 +289,10 @@ public class MapEditor{
+@@ -291,9 +293,10 @@ public class MapEditor{
      }
  
      public void drawSquare(int x, int y, Cons<Tile> drawer){

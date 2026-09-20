@@ -10,7 +10,7 @@ including internal units created by blocks (e.g. BuildTurret), so they always ha
  1 file changed, 17 insertions(+)
 
 diff --git a/core/src/mindustry/mod/DataPatcher.java b/core/src/mindustry/mod/DataPatcher.java
-index 9b5a5e0041e63396b9bbb90c7a0914192769a202..61ae4ea9029ac92350fed13f491390e24626e12f 100644
+index de6277bf9010a27163e23d1c01417343c3be57fb..1a834e106dd35e030c96efcb335bae64452002bd 100644
 --- a/core/src/mindustry/mod/DataPatcher.java
 +++ b/core/src/mindustry/mod/DataPatcher.java
 @@ -1,5 +1,6 @@

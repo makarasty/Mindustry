@@ -119,8 +119,8 @@ way-zer <himc.wicp@gmail.com> on 2024/9/8
  .../mindustry/ui/fragments/HudFragment.java   |   6 +-
  .../mindustry/ui/fragments/MenuFragment.java  |  24 ++-
  .../ui/fragments/PlacementFragment.java       | 164 ++++++++++++---
- .../ui/fragments/PlayerListFragment.java      |  68 +++---
- 27 files changed, 917 insertions(+), 136 deletions(-)
+ .../ui/fragments/PlayerListFragment.java      |  65 +++---
+ 27 files changed, 917 insertions(+), 133 deletions(-)
 
 diff --git a/core/src/mindustry/editor/MapInfoDialog.java b/core/src/mindustry/editor/MapInfoDialog.java
 index 1ee294233bdeccd9b03a24f7cff65a1d19417b77..5c76cc56cbbb4ba3a6783f864036bd93cab3cc90 100644
@@ -708,7 +708,7 @@ index c1c70a7808d971b400dfb9429593ddb47c70a3a8..1c6d945096b205d8ecae9117ce6653f8
          rect.grow(4f);
  
 diff --git a/core/src/mindustry/logic/LExecutor.java b/core/src/mindustry/logic/LExecutor.java
-index d3376bf952a8d624d1b353ea19d0ab0d146ec074..d757e0e5746193be9ffaea45514794d56f9646a6 100644
+index 2c038bc81e422b1c3fa8a6fc5d6fed61c9faf01b..7d1a8e3022ae787b578ec760f7d681a10ceb857f 100644
 --- a/core/src/mindustry/logic/LExecutor.java
 +++ b/core/src/mindustry/logic/LExecutor.java
 @@ -33,6 +33,7 @@ import mindustry.world.blocks.logic.LogicBlock.*;
@@ -719,7 +719,7 @@ index d3376bf952a8d624d1b353ea19d0ab0d146ec074..d757e0e5746193be9ffaea45514794d5
  
  import static mindustry.Vars.*;
  
-@@ -1964,8 +1965,14 @@ public class LExecutor{
+@@ -1966,8 +1967,14 @@ public class LExecutor{
              }
  
              switch(type){
@@ -2196,7 +2196,7 @@ index 135482c2c2f4ae1feb2a0c0ddc4b48feb1bf55d9..a638a39be12d832ccd4895d7add48db4
      }
  }
 diff --git a/core/src/mindustry/ui/fragments/PlayerListFragment.java b/core/src/mindustry/ui/fragments/PlayerListFragment.java
-index 30379f944e1e7811a460218176bcac996eaef08e..7cc53e41d8cb9706d6b26b0550db918efa199e65 100644
+index ce97fad416370c9c99cea2a99d0c29999285d059..5d46da121976e6fc48d16a4160392fcfa66b4e8f 100644
 --- a/core/src/mindustry/ui/fragments/PlayerListFragment.java
 +++ b/core/src/mindustry/ui/fragments/PlayerListFragment.java
 @@ -10,13 +10,14 @@ import arc.scene.ui.ImageButton.*;
@@ -2251,12 +2251,11 @@ index 30379f944e1e7811a460218176bcac996eaef08e..7cc53e41d8cb9706d6b26b0550db918e
              iconTable.add(new Image(user.icon()).setScaling(Scaling.bounded)).grow();
              iconTable.name = user.name();
              iconTable.touchable = Touchable.enabled;
-@@ -132,12 +133,12 @@ public class PlayerListFragment{
+@@ -132,11 +133,12 @@ public class PlayerListFragment{
              });
  
              button.add(iconTable).size(h);
--            button.labelWrap("[#" + user.color().toString().toUpperCase() + "]" + user.name()).style(Styles.outlineLabel).width(170f).pad(10);
--            button.add().grow();
+-            button.add("[#" + user.color().toString().toUpperCase() + "]" + user.name()).style(Styles.outlineLabel).growX().wrap(true).pad(10);
 +            button.image(Icon.admin).visible(() -> user.admin && !(!user.isLocal() && net.server())).pad(4).get().updateVisibility();
 +            button.labelWrap("[#" + user.color().toString().toUpperCase() + "]" + user.name()).style(Styles.outlineLabel).growX();
  
@@ -2268,7 +2267,7 @@ index 30379f944e1e7811a460218176bcac996eaef08e..7cc53e41d8cb9706d6b26b0550db918e
  
              var ustyle = new ImageButtonStyle(){{
                  down = Styles.none;
-@@ -147,11 +148,22 @@ public class PlayerListFragment{
+@@ -146,11 +148,22 @@ public class PlayerListFragment{
                  imageOverColor = Color.lightGray;
              }};
  
@@ -2292,7 +2291,7 @@ index 30379f944e1e7811a460218176bcac996eaef08e..7cc53e41d8cb9706d6b26b0550db918e
                          var dialog = new BaseDialog(user.coloredName());
  
                          dialog.title.setColor(Color.white);
-@@ -187,28 +199,7 @@ public class PlayerListFragment{
+@@ -186,28 +199,7 @@ public class PlayerListFragment{
                              //there's generally no reason to team switch outside PvP or sandbox, and it's basically an easy way to cheat
                              if(allowTeamSwitch){
                                  t.button("@player.team", Icon.redo, bstyle, () -> {
@@ -2322,12 +2321,10 @@ index 30379f944e1e7811a460218176bcac996eaef08e..7cc53e41d8cb9706d6b26b0550db918e
                                      dialog.hide();
                                  }).row();
                              }
-@@ -236,20 +227,11 @@ public class PlayerListFragment{
+@@ -235,18 +227,11 @@ public class PlayerListFragment{
                          dialog.cont.button("@back", Icon.left, dialog::hide).padTop(-1f).size(220f, 55f);
  
                          dialog.show();
--
--
 -                    }).size(h);
 +                    }).size(iconMed);
                  }
@@ -2340,8 +2337,8 @@ index 30379f944e1e7811a460218176bcac996eaef08e..7cc53e41d8cb9706d6b26b0550db918e
 -                .size(h);
              }
  
--            content.add(button).width(350f).height(h + 14);
-+            content.add(button).width(600f).height(h + 14);
+-            content.add(button).width(mobile ? 350f : 470f).height(h + 14);
++            content.add(button).width(mobile ? 350f : 600f).height(h + 14);
              content.row();
          }
  

@@ -123,7 +123,7 @@ index 07deebd06e7d0383cbd7e1f7b88f221b11fd20b2..135482c2c2f4ae1feb2a0c0ddc4b48fe
      }
  
 diff --git a/core/src/mindustry/world/Block.java b/core/src/mindustry/world/Block.java
-index 845dc269ab3516981542e86d6bc9359ad13aa7bc..d803b15f6586214348c237ab0127a05b28f859c1 100644
+index adc6bae120e57474c9ddb2e4079a25290c3f976c..a1c78b23837a9be77b1f81a5f4e3bc5f24cab15c 100644
 --- a/core/src/mindustry/world/Block.java
 +++ b/core/src/mindustry/world/Block.java
 @@ -1040,11 +1040,11 @@ public class Block extends UnlockableContent implements Senseable{
@@ -141,7 +141,7 @@ index 845dc269ab3516981542e86d6bc9359ad13aa7bc..d803b15f6586214348c237ab0127a05b
  
      @Override
 diff --git a/core/src/mindustry/world/Build.java b/core/src/mindustry/world/Build.java
-index 6d99b4e48a2e4d84ab4142c50acca305aef2bbde..871547d7f5023c6b71cf03fafa125e36f848aea5 100644
+index 7036ba204fb24d19716ba6bf8b0a9a87ee567484..053cbaf9aad0b90503a21a0c06f4472e64258641 100644
 --- a/core/src/mindustry/world/Build.java
 +++ b/core/src/mindustry/world/Build.java
 @@ -15,6 +15,7 @@ import mindustry.gen.*;

@@ -288,7 +288,7 @@ index 0000000000000000000000000000000000000000..181b87c1d5f3755f16a01c0528d0a89f
 +mindustry.annotations.misc.LogicStatementProcessor
 +mindustry.annotations.remote.RemoteProcess
 diff --git a/build.gradle b/build.gradle
-index 7ccf160d830bfdf06c52e7661ed7830ca2a0e59a..e399bef5753ac195fe759b7f25f1087ddd7f12a8 100644
+index c6c7c3ecfdefb93d533ffb9d4a7ba051ddd512b5..3fae1b52fd0dc0122b851bb0e76b4e2448e2a89b 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -1,29 +1,16 @@

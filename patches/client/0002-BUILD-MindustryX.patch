@@ -19,7 +19,7 @@ way-zer <himc.wicp@gmail.com> on 2024/4/27 at 18:57
  5 files changed, 10 insertions(+), 8 deletions(-)
 
 diff --git a/build.gradle b/build.gradle
-index e399bef5753ac195fe759b7f25f1087ddd7f12a8..e2141cefb3efa643b352510537cd8eafc8673540 100644
+index 3fae1b52fd0dc0122b851bb0e76b4e2448e2a89b..df21b00d084c968490b82df79d62c6b6453d7aff 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -230,12 +230,6 @@ project(":core"){
@@ -64,7 +64,7 @@ index 18556f89b7a170f23e8c73192443dfe61a7fb9aa..02d4ae1bda4f2c6836f5147a62811923
      }
  
 diff --git a/gradle.properties b/gradle.properties
-index d2f03ad7ecc0c38f12f4539f5baa32ad5f4a3c8d..d1ce8c40b57df4bc0f9d428fdefbbed552bc61b5 100644
+index a0930da61309247225c5fd936980a2da78edd6fd..cea14e7b2b6263e4c799a4e3eddd20d87b4e6131 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -18,7 +18,7 @@ kapt.use.worker.api=true
