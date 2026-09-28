@@ -126,7 +126,7 @@ object DebugUtil {
         val name = prefix.lastOrNull() ?: "Root"
         val objectsCount = objects.size
         val timeSum = objects.sumOf { it.avg }
-        val isLeaf = objects[0].tree.size <= prefix.size + 1
+        val isLeaf = objects.isNotEmpty() && objects[0].tree.size <= prefix.size + 1
         val children: List<TraceNode> = if (!isLeaf) objects.groupBy { it.tree[prefix.size] }.map { [name, list] ->
             TraceNode(prefix + name, list)
         } else emptyList()
