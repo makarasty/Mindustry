@@ -43,7 +43,7 @@ index 50cce3cf86fe46497cdfc6964707decd56d36d2f..c849d13bba7c9bf9a8d5623d755c8715
                  float d = damage * Math.min((in.block.size), baseRadius * 0.4f);
                  if(source != null){
 diff --git a/core/src/mindustry/entities/Lightning.java b/core/src/mindustry/entities/Lightning.java
-index 1f5b3193d395f86760e5cc30e24118c53b7811c7..0b780fc50cc19542109f5a200c0665f4018e5bdc 100644
+index 4554ce7dc94c192183d158577dd194964e419e01..9d60b9cbe166b17c5e55a40fbdefde3bccb23a2c 100644
 --- a/core/src/mindustry/entities/Lightning.java
 +++ b/core/src/mindustry/entities/Lightning.java
 @@ -47,7 +47,8 @@ public class Lightning{

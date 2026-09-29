@@ -29,6 +29,9 @@ MinRi2 <2275045670@qq.com>
 * 清除链接建筑时更新逻辑代码
 MinRi2 <2275045670@qq.com> on 2025/5/3
 
+* LCanvas.toggleComment() 代码转print换用LStatement.write （原版实现会自行调用LogicIO.write）
+m1cxxzfw3q <mcxzfwq@outlook.com> 0n 2026/9/28
+
 JUMP按钮始终显示在积木内部(长短条一致)；短条模式下收缩两个条件输入框腾出空间
 ---
  core/src/mindustry/logic/LCanvas.java         | 53 ++++++++++++++++++-
@@ -102,7 +105,7 @@ index 767af6ba1d1a438c98f093216d7cf5acd14c5903..554bfb9aac92d79349951754a00aaa95
 +            }else{  //代码->print
 +                st.saveUI();
 +                StringBuilder thisText = new StringBuilder();
-+                LogicIO.write(st, thisText);
++                st.write(thisText);
 +                var stNew = new PrintStatement();
 +                stNew.value = thisText.toString().replace(' ','_');
 +                newElem = new StatementElem(stNew);
@@ -129,7 +132,7 @@ index 767af6ba1d1a438c98f093216d7cf5acd14c5903..554bfb9aac92d79349951754a00aaa95
          public void draw(){
              float pad = 5f;
 diff --git a/core/src/mindustry/logic/LExecutor.java b/core/src/mindustry/logic/LExecutor.java
-index 1268dde9f4368428ff2196eca0cca1e3c5b12c29..f61330367ec9c6cf43a84dab3dc5cd4749cd6284 100644
+index 099249c446faaad358ef16efe6ef22fab3e8e09c..2c038bc81e422b1c3fa8a6fc5d6fed61c9faf01b 100644
 --- a/core/src/mindustry/logic/LExecutor.java
 +++ b/core/src/mindustry/logic/LExecutor.java
 @@ -47,6 +47,9 @@ public class LExecutor{
@@ -142,7 +145,7 @@ index 1268dde9f4368428ff2196eca0cca1e3c5b12c29..f61330367ec9c6cf43a84dab3dc5cd47
  
      public LVar counter, unit, thisv, ipt, queryResult;
  
-@@ -125,6 +128,7 @@ public class LExecutor{
+@@ -127,6 +130,7 @@ public class LExecutor{
          nameMap = null;
          //retain constants that are links, which, by convention, don't start with @ (builtin) or _ (numeric constant)
          vars = builder.vars.values().toSeq().retainAll(var -> !var.constant || var.name.charAt(0) != '_' && var.name.charAt(0) != '@').toArray(LVar.class);
@@ -150,7 +153,7 @@ index 1268dde9f4368428ff2196eca0cca1e3c5b12c29..f61330367ec9c6cf43a84dab3dc5cd47
          for(int i = 0; i < vars.length; i++){
              vars[i].id = i;
          }
-@@ -573,6 +577,7 @@ public class LExecutor{
+@@ -575,6 +579,7 @@ public class LExecutor{
          public void run(LExecutor exec){
              Object obj = target.obj();
              if(obj instanceof Building b && (exec.privileged || (exec.build != null && exec.build.validLink(b)))){
@@ -158,7 +161,7 @@ index 1268dde9f4368428ff2196eca0cca1e3c5b12c29..f61330367ec9c6cf43a84dab3dc5cd47
  
                  if(type == LAccess.enabled){
                      if(p1.bool()){
-@@ -1347,7 +1352,7 @@ public class LExecutor{
+@@ -1349,7 +1354,7 @@ public class LExecutor{
          @Override
          public void run(LExecutor exec){
              if(headless) return;
@@ -168,7 +171,7 @@ index 1268dde9f4368428ff2196eca0cca1e3c5b12c29..f61330367ec9c6cf43a84dab3dc5cd47
                  case active -> p1.setbool(control.input.logicCutscene);
                  case pan -> {
 diff --git a/core/src/mindustry/logic/LStatements.java b/core/src/mindustry/logic/LStatements.java
-index 1f1f0b40418f89a5e75a897b8f0d69445f8616b7..c7519eb33325439871075d72237478e367569e6d 100644
+index 7274b9a783669fcb5b9f084f71725ece51ba9619..30ee620399a7302e88a2e3a70478dfdd3148f099 100644
 --- a/core/src/mindustry/logic/LStatements.java
 +++ b/core/src/mindustry/logic/LStatements.java
 @@ -4,6 +4,9 @@ import arc.*;
@@ -189,7 +192,7 @@ index 1f1f0b40418f89a5e75a897b8f0d69445f8616b7..c7519eb33325439871075d72237478e3
  
  import static mindustry.Vars.*;
  import static mindustry.logic.LCanvas.*;
-@@ -973,7 +977,8 @@ public class LStatements{
+@@ -961,7 +965,8 @@ public class LStatements{
              table.table(this::rebuild);
  
              table.add().growX();
@@ -199,7 +202,7 @@ index 1f1f0b40418f89a5e75a897b8f0d69445f8616b7..c7519eb33325439871075d72237478e3
  
              String name = localizedName();
  
-@@ -990,6 +995,35 @@ public class LStatements{
+@@ -978,6 +983,35 @@ public class LStatements{
  
          }
  
@@ -235,7 +238,7 @@ index 1f1f0b40418f89a5e75a897b8f0d69445f8616b7..c7519eb33325439871075d72237478e3
          void rebuild(Table table){
              table.clearChildren();
              table.setColor(last);
-@@ -1001,16 +1035,15 @@ public class LStatements{
+@@ -989,16 +1023,15 @@ public class LStatements{
          }
  
          public static void addOp(LStatement st, Table t, ConditionOp op, Cons<ConditionOp> getter, String comp0, Cons<String> set0, String comp1, Cons<String> set2){

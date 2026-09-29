@@ -50,7 +50,7 @@ index 7da8364473a4b507649f0727c94bd581c50f45dd..22b7b2dc6001718aef7a6fcbb486b731
      }
  }
 diff --git a/core/src/mindustry/world/Block.java b/core/src/mindustry/world/Block.java
-index 9bc97cd463de34636856969b6af6103e0249fed6..845dc269ab3516981542e86d6bc9359ad13aa7bc 100644
+index 0c87930ce58be06b56cd4e5b726f2bd33c1677e8..adc6bae120e57474c9ddb2e4079a25290c3f976c 100644
 --- a/core/src/mindustry/world/Block.java
 +++ b/core/src/mindustry/world/Block.java
 @@ -35,6 +35,7 @@ import mindustry.world.blocks.power.*;
@@ -436,7 +436,7 @@ index 7d571d071abaa9e263a33dff128d118822d738a1..839b23a763a157631db88137c2fc59e5
  
      @Override
 diff --git a/core/src/mindustry/world/blocks/production/GenericCrafter.java b/core/src/mindustry/world/blocks/production/GenericCrafter.java
-index 4c40a18753035ca258ec273844e8e52bb49cb990..25ed9be80b0ee73e05b9de6fb10a9db93a088e91 100644
+index 1f73d69156893b800d9af6741573c3fd1731e3d3..ff5ae9b3c0e855017330eb8fcb1cd4efdc73ad9e 100644
 --- a/core/src/mindustry/world/blocks/production/GenericCrafter.java
 +++ b/core/src/mindustry/world/blocks/production/GenericCrafter.java
 @@ -1,5 +1,6 @@
@@ -460,7 +460,7 @@ index 4c40a18753035ca258ec273844e8e52bb49cb990..25ed9be80b0ee73e05b9de6fb10a9db9
  
  import static mindustry.Vars.*;
  
-@@ -386,5 +390,15 @@ public class GenericCrafter extends Block{
+@@ -389,5 +393,15 @@ public class GenericCrafter extends Block{
              warmup = read.f();
              if(legacyReadWarmup) read.f();
          }
@@ -531,10 +531,10 @@ index fe2998d05ff54ea7fa3adea70612f5dc6d44dac7..2a05d506c6e5bfb3b35568b8a8be7728
      public void drawPlanConfig(BuildPlan plan, Eachable<BuildPlan> list){
          drawPlanConfigCenter(plan, plan.config, "center", true);
 diff --git a/core/src/mindustry/world/blocks/units/Reconstructor.java b/core/src/mindustry/world/blocks/units/Reconstructor.java
-index bc365699aa1dd00dbe1c8076dc176a2110984929..f053ae30280795ab2e9d485d891104e4525a65a3 100644
+index e4112dc3d4ea8f049cac352407d380f15d3f97e8..23391501e20e8cf94e55a56a2e9a120225ba014c 100644
 --- a/core/src/mindustry/world/blocks/units/Reconstructor.java
 +++ b/core/src/mindustry/world/blocks/units/Reconstructor.java
-@@ -68,12 +68,11 @@ public class Reconstructor extends UnitBlock{
+@@ -69,12 +69,11 @@ public class Reconstructor extends UnitBlock{
      public void setBars(){
          super.setBars();
  

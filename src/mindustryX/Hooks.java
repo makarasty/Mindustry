@@ -8,8 +8,8 @@ import mindustry.game.EventType.*;
 import mindustry.gen.*;
 import mindustry.mod.*;
 import mindustryX.features.*;
+import mindustryX.features.ui.*;
 
-import java.net.*;
 import java.util.*;
 
 import static mindustry.Vars.ui;
@@ -28,11 +28,7 @@ public class Hooks implements ApplicationListener{
             Log.warn(VarsX.bundle.javaWarnLog(OS.javaVersion));
             Events.on(ClientLoadEvent.class, (e) -> ui.showInfo(VarsX.bundle.javaWarnDialog(OS.javaVersion)));
         }
-        try{
-            Http.onBeforeRequest = Hooks::onHttp;
-        }catch(NoSuchFieldError e){
-            Log.warn("Failed to set Http.onBeforeRequest " + e.toString());
-        }
+        Http.onRequest = GithubAcceleration::onRequest;
     }
 
     /** invoke after loading, just before `Mod::init` */
@@ -55,22 +51,6 @@ public class Hooks implements ApplicationListener{
         }
     }
 
-    @SuppressWarnings("unused")//call before arc.util.Http$HttpRequest.block
-    public static void onHttp(Http.HttpRequest req){
-        if(VarsX.githubMirror.get()){
-            try{
-                String url = req.url;
-                String host = new URL(url).getHost();
-                if(host.contains("github.com") || host.contains("raw.githubusercontent.com")){
-                    url = "https://gh.tinylake.top/" + url;
-                    req.url = url;
-                }
-            }catch(Exception e){
-                //ignore
-            }
-        }
-    }
-
     public static @Nullable String onHandleSendMessage(String message, @Nullable Player sender){
         if(message == null) return null;
         if(Vars.ui != null){
@@ -89,6 +69,11 @@ public class Hooks implements ApplicationListener{
             }
         }
         return message;
+    }
+
+    /** 返回 true 表示该 infoPopup 已被 MindustryX 接管（例如服务器积分榜），上游不应再显示原弹窗。 */
+    public static boolean onHandleInfoPopup(@Nullable String message, @Nullable String id){
+        return Vars.ui != null && BroadOverlay.tryHandleInfoPopup(message, id);
     }
 
     @Override

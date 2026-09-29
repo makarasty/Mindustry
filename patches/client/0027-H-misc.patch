@@ -27,8 +27,8 @@ Content-Transfer-Encoding: 8bit
  .../ui/fragments/PlacementFragment.java       |  6 ++----
  .../mindustry/world/blocks/defense/Radar.java |  9 +++++++++
  .../world/blocks/distribution/Router.java     |  3 ++-
- .../world/blocks/units/Reconstructor.java     |  5 +++--
- 20 files changed, 83 insertions(+), 50 deletions(-)
+ .../world/blocks/units/Reconstructor.java     |  3 ++-
+ 20 files changed, 82 insertions(+), 49 deletions(-)
 
 diff --git a/core/src/mindustry/ClientLauncher.java b/core/src/mindustry/ClientLauncher.java
 index 1d3b146ab2810e748f0bdb2563efd86de76df9d2..db74a378bd3c00295842f5f5b215c8d059bbd241 100644
@@ -100,7 +100,7 @@ index 6f689550d4fd7e6541ad7bd78097870b7c61c40a..c72dd992945c8fbebee7a3950246b9f5
      private Seq<Team> activeTeams = new Seq<>(Team.class);
      /** Maps teams to a map of flagged tiles by flag. */
 diff --git a/core/src/mindustry/content/Blocks.java b/core/src/mindustry/content/Blocks.java
-index 94c11e82fa1db20aa82b7f219c14743576db0e57..5799600248613c8e4d3cd193705589ae85c60d61 100644
+index 7d0101c8dcf4bea10cb847f6b1e9bd99dae8e639..080e9b91590398f55926ec351dbe7ec97104d0b7 100644
 --- a/core/src/mindustry/content/Blocks.java
 +++ b/core/src/mindustry/content/Blocks.java
 @@ -2112,6 +2112,7 @@ public class Blocks{
@@ -161,10 +161,10 @@ index eb890fbbbf6988b538b95a85b78033ace0fe9a69..2917de338876ff5ddeb4b694a0e7cdcc
  
              player.admin = false;
 diff --git a/core/src/mindustry/core/UI.java b/core/src/mindustry/core/UI.java
-index 344004b14c7ab114efccd7638e61de65d94d4854..5474fc5bc83d5f26a6fb72d97928bfbb4a679dc1 100644
+index cc9ffdc2687734c64d1ce70fe6e84553a72b6e7e..7c28428d1a3aa7f175b6398c35f0363e37ef9130 100644
 --- a/core/src/mindustry/core/UI.java
 +++ b/core/src/mindustry/core/UI.java
-@@ -643,7 +643,7 @@ public class UI implements ApplicationListener, Loadable{
+@@ -645,7 +645,7 @@ public class UI implements ApplicationListener, Loadable{
                  t.remove();
              }
          });
@@ -173,7 +173,7 @@ index 344004b14c7ab114efccd7638e61de65d94d4854..5474fc5bc83d5f26a6fb72d97928bfbb
          t.pack();
          t.act(0.1f);
          Core.scene.add(t);
-@@ -712,23 +712,7 @@ public class UI implements ApplicationListener, Loadable{
+@@ -714,23 +714,7 @@ public class UI implements ApplicationListener, Loadable{
      }
  
      public static String formatAmount(long number){
@@ -307,7 +307,7 @@ index 4d317988befe097723020cd9b8fb15d2296e4d71..2f4da991d5d432de1616e517d2996ed1
          add = new BaseDialog("@joingame.title");
          add.cont.add("@joingame.ip").padRight(5f).left();
 diff --git a/core/src/mindustry/ui/dialogs/KeybindDialog.java b/core/src/mindustry/ui/dialogs/KeybindDialog.java
-index 55799804f59d434cdf10e04907d667a9c2fb10ed..6fd22e1e617322ba5387e764fad1dbb0cfd1fa67 100644
+index 248aa3d78b0b598025fe8a1fa8d449a6cd507660..3ea9f96e84a588f71f6e1af78de0bd198b4d77df 100644
 --- a/core/src/mindustry/ui/dialogs/KeybindDialog.java
 +++ b/core/src/mindustry/ui/dialogs/KeybindDialog.java
 @@ -80,7 +80,7 @@ public class KeybindDialog extends Dialog{
@@ -422,7 +422,7 @@ index f319d4b84be6530116f372674363896c095e3f26..c540dcd42b45140924793fdab1f021b3
          team("/t"),
          admin("/a", player::admin)
 diff --git a/core/src/mindustry/ui/fragments/PlacementFragment.java b/core/src/mindustry/ui/fragments/PlacementFragment.java
-index 54dcd456bb1d38be5dd03d8285df43af89fda63e..06932a1ac0c04d74a5cf77ef43628d7117da88b9 100644
+index 04b3c75ef2f94417c5d51564862627460cae8494..07deebd06e7d0383cbd7e1f7b88f221b11fd20b2 100644
 --- a/core/src/mindustry/ui/fragments/PlacementFragment.java
 +++ b/core/src/mindustry/ui/fragments/PlacementFragment.java
 @@ -788,10 +788,8 @@ public class PlacementFragment{
@@ -486,19 +486,10 @@ index 26cd0f0a823fd10a2e7267e33ccdefe8054b03f8..9741b417cdce460e739400bd80c520e0
  
          @Override
 diff --git a/core/src/mindustry/world/blocks/units/Reconstructor.java b/core/src/mindustry/world/blocks/units/Reconstructor.java
-index f02fcf384cb096e87e20e8626afdbbb51d676f49..bc365699aa1dd00dbe1c8076dc176a2110984929 100644
+index 0432cad98682689852a4a725d20337a4e3e13f5d..e4112dc3d4ea8f049cac352407d380f15d3f97e8 100644
 --- a/core/src/mindustry/world/blocks/units/Reconstructor.java
 +++ b/core/src/mindustry/world/blocks/units/Reconstructor.java
-@@ -197,7 +197,7 @@ public class Reconstructor extends UnitBlock{
- 
-         public boolean canSetCommand(){
-             var output = unit();
--            return output == null || output.allowChangeCommands;
-+            return output == null || (output.commands.size > 1 && output.allowChangeCommands);
-         }
- 
-         @Override
-@@ -220,7 +220,8 @@ public class Reconstructor extends UnitBlock{
+@@ -223,7 +223,8 @@ public class Reconstructor extends UnitBlock{
  
              table.background(Styles.black6);
  

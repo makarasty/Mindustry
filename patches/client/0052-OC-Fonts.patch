@@ -43,7 +43,7 @@ index 65545b48974b23fa2a362e23542b12d1c2bcbd79..a6fc5e05b89db082ec8a2974f376c472
          add(netServer = new NetServer());
          add(netClient = new NetClient());
 diff --git a/core/src/mindustry/core/UI.java b/core/src/mindustry/core/UI.java
-index 5474fc5bc83d5f26a6fb72d97928bfbb4a679dc1..7d864784a0d64f8f344c5b4d20d7af5f646d07fc 100644
+index 7c28428d1a3aa7f175b6398c35f0363e37ef9130..157c2b4f3a9c18d3453d96949abab0a003a98c69 100644
 --- a/core/src/mindustry/core/UI.java
 +++ b/core/src/mindustry/core/UI.java
 @@ -94,8 +94,6 @@ public class UI implements ApplicationListener, Loadable{
@@ -56,7 +56,7 @@ index 5474fc5bc83d5f26a6fb72d97928bfbb4a679dc1..7d864784a0d64f8f344c5b4d20d7af5f
  
      public static void loadColors(){
 diff --git a/core/src/mindustry/ui/Fonts.java b/core/src/mindustry/ui/Fonts.java
-index 397b42b472e9b8739dfc0e4d8948b6af481780b9..40c0e7858e69a0ce3fe5be7acd946a877c138822 100644
+index 6670ee5abd476b872f66d7c25070b67754ce3e0e..33bd459410d3abc42eb7c6cd0332354b1ff2cca5 100644
 --- a/core/src/mindustry/ui/Fonts.java
 +++ b/core/src/mindustry/ui/Fonts.java
 @@ -62,11 +62,25 @@ public class Fonts{
