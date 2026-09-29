@@ -1,0 +1,126 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Tue, 29 Sep 2026 19:55:46 +0300
+Subject: [PATCH] OG: skip redundant per-tick scans in Unloader, PowerGraph and
+ LegsComp
+
+Unloaders skip the acceptItem chain when no neighbour holds the item,
+batteries are summed in one pass, and the leg floor colour is only computed
+for client effects.
+---
+ .../src/mindustry/entities/comp/LegsComp.java |  3 +-
+ .../world/blocks/power/PowerGraph.java        | 30 +++++++++++++++----
+ .../world/blocks/storage/Unloader.java        | 13 ++++++++
+ 3 files changed, 39 insertions(+), 7 deletions(-)
+
+diff --git a/core/src/mindustry/entities/comp/LegsComp.java b/core/src/mindustry/entities/comp/LegsComp.java
+index 0889862e939e6f629b048bed8be726a1de68ef00..ca4346ff486d2c84a899153de3f6db22f2eb8110 100644
+--- a/core/src/mindustry/entities/comp/LegsComp.java
++++ b/core/src/mindustry/entities/comp/LegsComp.java
+@@ -166,7 +166,6 @@ abstract class LegsComp implements Posc, Rotc, Hitboxc, Unitc{
+             l.stage = moving ? stageF % 1f : Mathf.lerpDelta(l.stage, 0f, 0.1f);
+ 
+             Tile tile = Vars.world.tileWorld(l.base.x, l.base.y);
+-            Color floorColor = tile == null ? Color.clear : tile.getFloorColor();
+             Floor floor = tile == null ? Blocks.air.asFloor() : tile.floor();
+ 
+             if(tile != null && tile.isDeep()){
+@@ -179,6 +178,8 @@ abstract class LegsComp implements Posc, Rotc, Hitboxc, Unitc{
+                 //create effect when transitioning to a group it can't move in
+                 if(!move && (moving || !type.legContinuousMove) && i % div == l.group){
+                     if(!headless && !inFogTo(player.team())){
++                        //MDTX: only effects use the floor color, computing it for every leg on servers was wasted work
++                        Color floorColor = tile == null ? Color.clear : tile.getFloorColor();
+                         if(floor.isLiquid && tile != null && tile.block() == Blocks.air){
+                             floor.walkEffect.at(l.base.x, l.base.y, type.rippleScale, floorColor);
+                             floor.walkSound.at(x, y, 1f, floor.walkSoundVolume);
+diff --git a/core/src/mindustry/world/blocks/power/PowerGraph.java b/core/src/mindustry/world/blocks/power/PowerGraph.java
+index f37fa08a66c09dce478a3141ea7b10c6294617ff..d05fab7e28fa69894b73cb5529a89003269b1c49 100644
+--- a/core/src/mindustry/world/blocks/power/PowerGraph.java
++++ b/core/src/mindustry/world/blocks/power/PowerGraph.java
+@@ -152,7 +152,10 @@ public class PowerGraph{
+     }
+ 
+     public float useBatteries(float needed){
+-        float stored = getBatteryStored();
++        return useBatteries(needed, getBatteryStored());
++    }
++
++    private float useBatteries(float needed, float stored){
+         if(Mathf.equal(stored, 0f)) return 0f;
+ 
+         float used = Math.min(stored, needed);
+@@ -168,7 +171,10 @@ public class PowerGraph{
+     }
+ 
+     public float chargeBatteries(float excess){
+-        float capacity = getBatteryCapacity();
++        return chargeBatteries(excess, getBatteryCapacity());
++    }
++
++    private float chargeBatteries(float excess, float capacity){
+         //how much of the missing in each battery % is charged
+         float chargedPercent = Math.min(excess/capacity, 1f);
+         if(Mathf.equal(capacity, 0f)) return 0f;
+@@ -232,8 +238,20 @@ public class PowerGraph{
+ 
+         lastScaledPowerIn = (powerProduced + energyDelta) / Time.delta;
+         lastScaledPowerOut = powerNeeded / Time.delta;
+-        lastCapacity = getTotalBatteryCapacity();
+-        lastPowerStored = getBatteryStored();
++        //MDTX: one pass over batteries instead of up to four; every sum keeps its own order and expression, so the result is bit-identical
++        float totalCapacity = 0f, stored = 0f, missing = 0f;
++        var bitems = batteries.items;
++        for(int i = 0; i < batteries.size; i++){
++            var battery = bitems[i];
++            if(battery.enabled){
++                float capacity = battery.block.consPower.capacity;
++                totalCapacity += capacity;
++                stored += battery.power.status * capacity;
++                missing += (1f - battery.power.status) * capacity;
++            }
++        }
++        lastCapacity = totalCapacity;
++        lastPowerStored = stored;
+ 
+         powerBalance.add((lastPowerProduced - lastPowerNeeded + energyDelta) / Time.delta);
+         energyDelta = 0f;
+@@ -243,12 +261,12 @@ public class PowerGraph{
+ 
+             if(!Mathf.equal(powerNeeded, powerProduced)){
+                 if(powerNeeded > powerProduced){
+-                    float powerBatteryUsed = useBatteries(powerNeeded - powerProduced);
++                    float powerBatteryUsed = useBatteries(powerNeeded - powerProduced, stored);
+                     powerProduced += powerBatteryUsed;
+                     lastPowerProduced += powerBatteryUsed;
+                 }else if(powerProduced > powerNeeded){
+                     charged = true;
+-                    powerProduced -= chargeBatteries(powerProduced - powerNeeded);
++                    powerProduced -= chargeBatteries(powerProduced - powerNeeded, missing);
+                 }
+             }
+ 
+diff --git a/core/src/mindustry/world/blocks/storage/Unloader.java b/core/src/mindustry/world/blocks/storage/Unloader.java
+index 80cfca1092ce32be8b7f3b3744cda05f341a45f8..3fa827bf04824d33dbf6cfaf5dd40cbdf6edbda6 100644
+--- a/core/src/mindustry/world/blocks/storage/Unloader.java
++++ b/core/src/mindustry/world/blocks/storage/Unloader.java
+@@ -118,6 +118,19 @@ public class Unloader extends Block{
+             isDistinct = false;
+ 
+             var pbi = possibleBlocks.items;
++
++            //MDTX: without a provider holding the item the result is always false; skip the expensive acceptItem() chain.
++            //canLoad/canUnload are only read after a true result, so leaving them stale here is unobservable.
++            boolean anyProvider = false;
++            for(int i = 0, l = possibleBlocks.size; i < l; i++){
++                var other = pbi[i].building;
++                if(other.items != null && other.items.has(item) && other.canUnload()){
++                    anyProvider = true;
++                    break;
++                }
++            }
++            if(!anyProvider) return false;
++
+             for(int i = 0, l = possibleBlocks.size; i < l; i++){
+                 var pb = pbi[i];
+                 var other = pb.building;

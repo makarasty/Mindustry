@@ -1,0 +1,231 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Tue, 29 Sep 2026 19:55:46 +0300
+Subject: [PATCH] OG: cache bridge and processor link validation until topology
+ changes
+
+Tile.topologyVersion goes up on block, team and bridge link changes, and
+bridges and processors only redo their link checks after that. World
+processors and bridges with mixed linkSameType still check every tick.
+world.tileChanges isn't reused, bumping it on team changes would change
+BeamNode.
+---
+ .../mindustry/entities/comp/BuildingComp.java |  6 ++-
+ core/src/mindustry/world/Tile.java            |  4 ++
+ .../world/blocks/distribution/ItemBridge.java | 45 ++++++++++++++-----
+ .../world/blocks/logic/LogicBlock.java        | 13 +++++-
+ 4 files changed, 54 insertions(+), 14 deletions(-)
+
+diff --git a/core/src/mindustry/entities/comp/BuildingComp.java b/core/src/mindustry/entities/comp/BuildingComp.java
+index fe37af72c8560d6b815d4609dea75f8f201cffcf..93002a424091cf14844d3cf5489f9e01c79116c2 100644
+--- a/core/src/mindustry/entities/comp/BuildingComp.java
++++ b/core/src/mindustry/entities/comp/BuildingComp.java
+@@ -224,7 +224,10 @@ abstract class BuildingComp implements Posc, Teamc, Healthc, Buildingc, Timerc,
+         //cap health by block health in case of nerfs
+         health = Math.min(read.f(), block.health);
+         byte rot = read.b();
+-        team = Team.get(read.b());
++        Team readTeam = Team.get(read.b());
++        //MDTX: block snapshots change the team without changeTeam(); cached link validation must notice
++        if(readTeam != team) Tile.topologyVersion++;
++        team = readTeam;
+ 
+         rotation = rot & 0b01111111;
+ 
+@@ -1822,6 +1825,7 @@ abstract class BuildingComp implements Posc, Teamc, Healthc, Buildingc, Timerc,
+         if(was) indexer.removeIndex(tile);
+ 
+         this.team = next;
++        Tile.topologyVersion++;
+ 
+         if(power != null && updatePower){
+             var oldGraph = power.graph;
+diff --git a/core/src/mindustry/world/Tile.java b/core/src/mindustry/world/Tile.java
+index 2454d2a96075adb3a35d57a8f8769ed0792444b8..5d0c15767275e0561136bff609fc3fc7c0fdebc4 100644
+--- a/core/src/mindustry/world/Tile.java
++++ b/core/src/mindustry/world/Tile.java
+@@ -24,6 +24,8 @@ import static mindustry.Vars.*;
+ 
+ public class Tile implements Position, QuadTreeObject, Displayable{
+     private static final TileChangeEvent tileChange = new TileChangeEvent();
++    /** MDTX: incremented on every block/team change and bridge relink; lets blocks cache link validation between changes. */
++    public static long topologyVersion;
+     private static final TilePreChangeEvent preChange = new TilePreChangeEvent();
+     private static final TileFloorChangeEvent floorChange = new TileFloorChangeEvent();
+     private static final TileOverlayChangeEvent overlayChange = new TileOverlayChangeEvent();;
+@@ -214,6 +216,7 @@ public class Tile implements Position, QuadTreeObject, Displayable{
+     public void setTeam(Team team){
+         if(build != null){
+             build.team(team);
++            topologyVersion++;
+         }
+     }
+ 
+@@ -239,6 +242,7 @@ public class Tile implements Position, QuadTreeObject, Displayable{
+ 
+     public void setBlock(Block type, Team team, int rotation, Prov<Building> entityprov){
+         changing = true;
++        topologyVersion++;
+ 
+         if(type.isStatic() || this.block.isStatic()){
+             recache();
+diff --git a/core/src/mindustry/world/blocks/distribution/ItemBridge.java b/core/src/mindustry/world/blocks/distribution/ItemBridge.java
+index a7713dbfa9f3fb0e478892cb48feaa66c3486585..cfc8303cc9f1361b94669227492ad9fb990e668e 100644
+--- a/core/src/mindustry/world/blocks/distribution/ItemBridge.java
++++ b/core/src/mindustry/world/blocks/distribution/ItemBridge.java
+@@ -36,6 +36,9 @@ public class ItemBridge extends Block{
+     public boolean pulse = false;
+     /** If true, only allows this bridge to link with the same block type. Otherwise this can link with any ItemBridge. */
+     public boolean linkSameType = true;
++
++    /** MDTX: every bridge block, to detect mixed linkSameType content (see ItemBridgeBuild.validatedTopology). */
++    protected static final Seq<ItemBridge> all = new Seq<>();
+     public float arrowSpacing = 4f, arrowOffset = 2f, arrowPeriod = 0.4f;
+     public float arrowTimeScl = 6.2f;
+     public float bridgeWidth = 6.5f;
+@@ -47,6 +50,7 @@ public class ItemBridge extends Block{
+ 
+     public ItemBridge(String name){
+         super(name);
++        all.add(this);
+         update = true;
+         solid = true;
+         underBullets = true;
+@@ -65,9 +69,9 @@ public class ItemBridge extends Block{
+         delayLandingConfig = true;
+ 
+         //point2 config is relative
+-        config(Point2.class, (ItemBridgeBuild tile, Point2 i) -> tile.link = Point2.pack(i.x + tile.tileX(), i.y + tile.tileY()));
++        config(Point2.class, (ItemBridgeBuild tile, Point2 i) -> tile.setLink(Point2.pack(i.x + tile.tileX(), i.y + tile.tileY())));
+         //integer is not
+-        config(Integer.class, (ItemBridgeBuild tile, Integer i) -> tile.link = i);
++        config(Integer.class, (ItemBridgeBuild tile, Integer i) -> tile.setLink(i));
+     }
+ 
+     @Override
+@@ -215,10 +219,18 @@ public class ItemBridge extends Block{
+         public float time = -8f, timeSpeed;
+         public boolean wasMoved, moved, hadValidLink;
+         public float transportCounter;
++        /** MDTX: {@link Tile#topologyVersion} of the last link validation. Validation only depends on blocks, teams and links, so it is skipped until one of them changes. */
++        protected long validatedTopology = -1;
++
++        public void setLink(int link){
++            if(this.link == link) return;
++            this.link = link;
++            Tile.topologyVersion++;
++        }
+ 
+         @Override
+         public void pickedUp(){
+-            link = -1;
++            setLink(-1);
+         }
+ 
+         @Override
+@@ -341,21 +353,28 @@ public class ItemBridge extends Block{
+ 
+             time += timeSpeed * delta();
+ 
+-            checkIncoming();
+-
+             Tile other = world.tile(link);
+-            hadValidLink = linkValid(tile, other);
++
++            //bridges with different linkSameType disagree on link validity and re-add/remove each other every tick, so no caching then
++            if(validatedTopology != Tile.topologyVersion || all.contains(b -> !b.linkSameType)){
++                validatedTopology = Tile.topologyVersion;
++                checkIncoming();
++
++                hadValidLink = linkValid(tile, other);
++
++                if(hadValidLink){
++                    var inc = ((ItemBridgeBuild)other.build).incoming;
++                    int pos = tile.pos();
++                    if(!inc.contains(pos)){
++                        inc.add(pos);
++                    }
++                }
++            }
+ 
+             if(!hadValidLink){
+                 doDump();
+                 warmup = 0f;
+             }else{
+-                var inc = ((ItemBridgeBuild)other.build).incoming;
+-                int pos = tile.pos();
+-                if(!inc.contains(pos)){
+-                    inc.add(pos);
+-                }
+-
+                 warmup = Mathf.approachDelta(warmup, efficiency, 1f / 30f);
+                 updateTransport(other.build);
+             }
+@@ -557,6 +576,8 @@ public class ItemBridge extends Block{
+             for(int i = 0; i < links; i++){
+                 incoming.add(read.i());
+             }
++            //MDTX: link and incoming changed outside setLink()
++            Tile.topologyVersion++;
+ 
+             if(revision >= 1){
+                 wasMoved = moved = read.bool();
+diff --git a/core/src/mindustry/world/blocks/logic/LogicBlock.java b/core/src/mindustry/world/blocks/logic/LogicBlock.java
+index 32c682a9d3cec936885774d22a7d66156c227dfa..7381dc365f4f7b9ef3b426d3912d40a2a90cec5c 100644
+--- a/core/src/mindustry/world/blocks/logic/LogicBlock.java
++++ b/core/src/mindustry/world/blocks/logic/LogicBlock.java
+@@ -98,6 +98,8 @@ public class LogicBlock extends Block{
+             var lbuild = world.build(pos);
+             int x = lbuild.tileX(), y = lbuild.tileY();
+             int oldSize = entity.links.size;
++            //MDTX: an unlink and a relink in one tick keep links.size, so invalidate explicitly
++            entity.validatedTopology = -1;
+ 
+             entity.links.removeAll(l -> {
+                 boolean remove = world.build(l.x, l.y) == lbuild;
+@@ -271,6 +273,9 @@ public class LogicBlock extends Block{
+         public Seq<LogicLink> links = new Seq<>();
+         public @Nullable ObjectIntMap<String> linkMap;
+         public boolean checkedDuplicates = false;
++        /** MDTX: {@link Tile#topologyVersion} and link count at the last link validation; see updateTile. */
++        protected long validatedTopology = -1;
++        protected int validatedLinks = -1;
+ 
+         public int ipt = instructionsPerTick;
+         /** Display name, for convenience. This is currently only available for world processors. */
+@@ -287,6 +292,7 @@ public class LogicBlock extends Block{
+         }
+ 
+         public void readCompressed(byte[] data, boolean relative){
++            validatedTopology = -1;
+             try(DataInputStream stream = new DataInputStream(new InflaterInputStream(new ByteArrayInputStream(data)))){
+                 int version = stream.read();
+ 
+@@ -374,6 +380,7 @@ public class LogicBlock extends Block{
+         }
+ 
+         public void updateCode(String str, boolean keep, Cons<LAssembler> assemble){
++            validatedTopology = -1;
+             linkMap = null;
+             if(str != null){
+                 code = str;
+@@ -518,7 +525,9 @@ public class LogicBlock extends Block{
+             }
+ 
+             //check for previously invalid links to add after configuration
+-            boolean changed = false, updates = true;
++            //MDTX: link validity only depends on blocks, teams and the link list, so the per-link world lookups are skipped until one of them changes.
++            //World processors also depend on rules and are always checked.
++            boolean changed = false, updates = privileged || validatedTopology != Tile.topologyVersion || validatedLinks != links.size;
+ 
+             while(updates){
+                 updates = false;
+@@ -569,6 +578,8 @@ public class LogicBlock extends Block{
+             if(changed){
+                 updateLinks();
+             }
++            validatedTopology = Tile.topologyVersion;
++            validatedLinks = links.size;
+ 
+             if(state.rules.disableWorldProcessors && privileged) return;
+ 
