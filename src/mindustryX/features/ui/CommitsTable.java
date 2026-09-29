@@ -146,8 +146,9 @@ public class CommitsTable extends Table{
 
             left.table(bottom -> {
                 bottom.defaults().left();
-                bottom.image(author != null ? getAvatar(author.login, author.avatar_url) : NOT_FOUND).pad(8f).size(Vars.iconMed);
-                bottom.add(author != null ? author.login : "???").style(Styles.outlineLabel).color(Pal.lightishGray).padLeft(4f);
+                String login = author == null ? null : author.login;
+                bottom.image(getAvatar(login, author.avatar_url)).pad(8f).size(Vars.iconMed);
+                bottom.add(login == null ? "???" : login).style(Styles.outlineLabel).color(Pal.lightishGray).padLeft(4f);
             });
         });
 
@@ -160,6 +161,7 @@ public class CommitsTable extends Table{
     }
 
     private static TextureRegion getAvatar(String login, String url){
+        if(login == null || url == null) return NOT_FOUND;
         TextureRegion region = AVATAR_CACHE.get(login, TextureRegion::new);
         if(region.texture == null){
             region.set(NOT_FOUND);

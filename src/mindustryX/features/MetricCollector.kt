@@ -111,6 +111,7 @@ object MetricCollector {
     private fun getModCause(e: Throwable): LoadedMod? {
         if (e is ModRelatedException) return e.mod
         e.cause?.let { getModCause(it) }?.let { return it }
+        e.suppressed.firstNotNullOfOrNull { getModCause(it) }?.let { return it }
         return CrashHandler.getModCause(e)
     }
 
