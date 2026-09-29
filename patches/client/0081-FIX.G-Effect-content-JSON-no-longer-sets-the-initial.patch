@@ -1,0 +1,35 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: WayZer <himc.wicp@gmail.com>
+Date: Tue, 29 Sep 2026 22:52:33 +0800
+Subject: [PATCH] FIX.G(Effect) content JSON no longer sets the initialized
+ latch
+
+Effect.initialized is a runtime latch that create() sets before init()
+runs. Arc's Json#getFields exposes every declared non-transient field,
+so content definitions dumped from an already created effect carry
+"initialized": true. readFields() then sets the latch on a freshly
+constructed effect, create() skips init(), and the interp fields
+(colorInterp was added in #11477) stay at their defaults - crashing
+ParticleEffect#render once the effect is finally spawned.
+
+Marking the field transient keeps it out of JSON (Json#getFields skips
+transient fields) while leaving runtime behavior unchanged; the stray
+"initialized" field is now reported as unknown and ignored.
+---
+ core/src/mindustry/entities/Effect.java | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/core/src/mindustry/entities/Effect.java b/core/src/mindustry/entities/Effect.java
+index 3d948c538ea91437be30224408350cf6a29aedbd..b002675cd7d4312255f3a0cc82d787a3f21ca5ff 100644
+--- a/core/src/mindustry/entities/Effect.java
++++ b/core/src/mindustry/entities/Effect.java
+@@ -23,7 +23,8 @@ public class Effect{
+ 
+     public static final Seq<Effect> all = new Seq<>();
+ 
+-    private boolean initialized;
++    //MDTX: transient, so content JSON dumps cannot set this latch and make create() skip init()
++    private transient boolean initialized;
+ 
+     public final int id;
+ 
