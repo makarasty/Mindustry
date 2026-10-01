@@ -9,49 +9,51 @@ Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
 
 ---
- core/src/mindustry/net/Packets.java           |  5 ++++-
- core/src/mindustry/ui/dialogs/JoinDialog.java | 17 +++++++++++++++--
- 2 files changed, 19 insertions(+), 3 deletions(-)
+ core/src/mindustry/net/Packets.java           |  6 ++++--
+ core/src/mindustry/ui/dialogs/JoinDialog.java | 18 ++++++++++++++++--
+ 2 files changed, 20 insertions(+), 4 deletions(-)
 
 diff --git a/core/src/mindustry/net/Packets.java b/core/src/mindustry/net/Packets.java
-index 403e35653904ff508be317c325a0e6f1ab056d6b..c3e651b984bdbe65ca8ce33d4278ab50988fab50 100644
+index 403e35653904ff508be317c325a0e6f1ab056d6b..1c6db91e4371774a00ca5998f0d37e5c0c790425 100644
 --- a/core/src/mindustry/net/Packets.java
 +++ b/core/src/mindustry/net/Packets.java
-@@ -7,6 +7,7 @@ import arc.util.io.*;
+@@ -7,6 +7,8 @@ import arc.util.io.*;
  import arc.util.serialization.*;
  import mindustry.core.*;
  import mindustry.io.*;
 +import mindustryX.*;
++import mindustryX.features.*;
  
  import java.io.*;
  import java.util.zip.*;
-@@ -142,6 +143,8 @@ public class Packets{
-     }
- 
-     public static class ConnectPacket extends Packet{
-+        @MindustryXApi
-+        public static int clientVersion;
-         public int version;
-         public String versionType;
-         public Seq<String> mods;
-@@ -151,7 +154,7 @@ public class Packets{
+@@ -151,8 +153,8 @@ public class Packets{
  
          @Override
          public void write(Writes buffer){
 -            buffer.i(Version.build);
-+            buffer.i(clientVersion != 0 ? clientVersion : Version.build);
-             TypeIO.writeString(buffer, versionType);
+-            TypeIO.writeString(buffer, versionType);
++            buffer.i(LogicExt.mockProtocol);
++            TypeIO.writeString(buffer, LogicExt.mockProtocol < 1000 ? "official" : versionType);
              TypeIO.writeString(buffer, name);
              TypeIO.writeString(buffer, locale);
+             TypeIO.writeString(buffer, usid);
 diff --git a/core/src/mindustry/ui/dialogs/JoinDialog.java b/core/src/mindustry/ui/dialogs/JoinDialog.java
-index 2f4da991d5d432de1616e517d2996ed1e8403678..db6c2bce264e73c2df509879aac41f2d6b265ec6 100644
+index 2f4da991d5d432de1616e517d2996ed1e8403678..4940ac0a664ab6363db421095a2ae5d2e22b6bfa 100644
 --- a/core/src/mindustry/ui/dialogs/JoinDialog.java
 +++ b/core/src/mindustry/ui/dialogs/JoinDialog.java
-@@ -676,9 +676,22 @@ public class JoinDialog extends BaseDialog{
+@@ -23,6 +23,7 @@ import mindustry.io.versions.*;
+ import mindustry.net.*;
+ import mindustry.net.Packets.*;
+ import mindustry.ui.*;
++import mindustryX.features.*;
+ 
+ import java.util.*;
+ 
+@@ -676,9 +677,22 @@ public class JoinDialog extends BaseDialog{
      }
  
      void safeConnect(String ip, int port, int version){
-+        ConnectPacket.clientVersion = Version.build;
++        LogicExt.mockProtocol = Version.build;
          if(version != Version.build && Version.build != -1 && version != -1){
 -            ui.showInfo("[scarlet]" + (version > Version.build ? KickReason.clientOutdated : KickReason.serverOutdated) + "\n[]" +
 -                Core.bundle.format("server.versions", Version.build, version));
@@ -63,7 +65,7 @@ index 2f4da991d5d432de1616e517d2996ed1e8403678..db6c2bce264e73c2df509879aac41f2d
 +                cont.pack();
 +                buttons.button(Core.bundle.get("mdtx.join.forceJoin"), () -> {
 +                    hide();
-+                    ConnectPacket.clientVersion = version;
++                    LogicExt.mockProtocol = version;
 +                    connect(ip, port);
 +                }).get().getLabel().setWrap(false);
 +                buttons.button("@cancel", this::hide);

@@ -17,8 +17,8 @@ public class LogicExt{
     public static boolean invertMapClick = false;
     /** Disable player control in InputHandler */
     public static boolean noUpdatePlayerMovement = false;
-    /** protocol to mock, for compatible to force join servers. */
-    public static int mockProtocol; /* = Version.build */
+    /** protocol to mock, for compatible to force join servers. 版本事实来源，默认当前版本。 */
+    public static volatile int mockProtocol = Version.build;
     /** Use contentsMapping from server, for compatibility when build version is not same. */
     public static boolean contentsCompatibleMode = false;
     public static boolean v146Mode = false;
@@ -49,7 +49,6 @@ public class LogicExt{
             worldCreator = worldCreator0.get();
             terrainSchematic = terrainSchematic0.get();
             invertMapClick = invertMapClick0.get();
-            mockProtocol = ConnectPacket.clientVersion > 0 ? ConnectPacket.clientVersion : Version.build;
             v146Mode = mockProtocol == 146;
             contentsCompatibleMode = mockProtocol != Version.build;
 

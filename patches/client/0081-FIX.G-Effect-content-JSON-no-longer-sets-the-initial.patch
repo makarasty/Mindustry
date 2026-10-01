@@ -20,10 +20,10 @@ transient fields) while leaving runtime behavior unchanged; the stray
  1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/core/src/mindustry/entities/Effect.java b/core/src/mindustry/entities/Effect.java
-index 3d948c538ea91437be30224408350cf6a29aedbd..b002675cd7d4312255f3a0cc82d787a3f21ca5ff 100644
+index 341ca42edb3cdadba7cfe6fbb8a9b5e83a2f39c4..917fa452a8f33371cba9cea6cac6cdf11c7b838f 100644
 --- a/core/src/mindustry/entities/Effect.java
 +++ b/core/src/mindustry/entities/Effect.java
-@@ -23,7 +23,8 @@ public class Effect{
+@@ -24,7 +24,8 @@ public class Effect{
  
      public static final Seq<Effect> all = new Seq<>();
  

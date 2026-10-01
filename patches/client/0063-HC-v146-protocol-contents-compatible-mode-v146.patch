@@ -16,8 +16,7 @@ Content-Transfer-Encoding: 8bit
  core/src/mindustry/io/TypeIO.java          | 18 ++++++++--
  core/src/mindustry/net/Net.java            | 24 ++++++++++---
  core/src/mindustry/net/NetworkIO.java      | 42 +++++++++++++++++-----
- core/src/mindustry/net/Packets.java        |  2 +-
- 8 files changed, 110 insertions(+), 18 deletions(-)
+ 7 files changed, 109 insertions(+), 17 deletions(-)
 
 diff --git a/core/build.gradle.kts b/core/build.gradle.kts
 index 36ba5536564d9bfb4ca7493f2407fece2b64c1b1..1fe3cba38e53b11e66f6341b0cb6ccd02acff8ee 100644
@@ -330,16 +329,3 @@ index 3c59aebaa1c2610f974d160e826241628a9a81f1..12a0d8c55e3a9c0231dc4bfc49d6d7be
              content.setTemporaryMapper(null);
          }
      }
-diff --git a/core/src/mindustry/net/Packets.java b/core/src/mindustry/net/Packets.java
-index c3e651b984bdbe65ca8ce33d4278ab50988fab50..b8f0199cf11edd2d1afe6c76e90d1e8c52d50f31 100644
---- a/core/src/mindustry/net/Packets.java
-+++ b/core/src/mindustry/net/Packets.java
-@@ -155,7 +155,7 @@ public class Packets{
-         @Override
-         public void write(Writes buffer){
-             buffer.i(clientVersion != 0 ? clientVersion : Version.build);
--            TypeIO.writeString(buffer, versionType);
-+            TypeIO.writeString(buffer, clientVersion < 1000 ? "official" : versionType);
-             TypeIO.writeString(buffer, name);
-             TypeIO.writeString(buffer, locale);
-             TypeIO.writeString(buffer, usid);
