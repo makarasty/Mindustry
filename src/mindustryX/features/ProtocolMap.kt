@@ -59,7 +59,9 @@ object ProtocolMap {
     @JvmStatic
     fun mapId(oldId: Int): Int {
         if (LogicExt.mockProtocol >= mindustry.core.Version.build) return oldId
-        return version().idMapping.get(oldId, -1)
+        val id = version().idMapping.get(oldId, -1)
+        check(id >= 0) { "Deleted packet for ${LogicExt.mockProtocol}: ${version().mapping.getOrNull(oldId) ?: "???"}($oldId)" }
+        return id
     }
 
     fun version(): Version {

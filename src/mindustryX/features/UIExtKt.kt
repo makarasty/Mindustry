@@ -10,6 +10,7 @@ import arc.scene.event.Touchable
 import arc.scene.ui.layout.Table
 import arc.util.Align
 import mindustry.Vars
+import mindustry.gen.Icon
 import mindustry.gen.Tex
 import mindustryX.features.ui.*
 import mindustryX.features.ui.toolTable.AdvanceToolTable
@@ -54,6 +55,17 @@ object UIExtKt {
         }
         OverlayUI.registerWindow("markAndShare", ShareFeature.newShareTable()).apply {
             availability = inGameOnly
+        }
+        //回放状态窗口，任何时候都可用
+        OverlayUI.registerWindow("replay", ReplayWindow()).apply {
+            ReplayWindow.window = this
+            autoHeight = true
+            resizable = true
+            availability = Prov{ inGameOnly.get() && ReplayController.replaying }
+        }
+
+        Vars.ui.join.buttons.apply {
+            button(UIExt.i("回放管理器"), Icon.file) { ReplayWindow.showManagerDialog() }
         }
     }
 

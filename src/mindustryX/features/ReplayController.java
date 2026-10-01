@@ -2,16 +2,14 @@ package mindustryX.features;
 
 import arc.*;
 import arc.files.*;
-import arc.scene.ui.layout.*;
 import arc.util.*;
+import kotlin.*;
 import mindustry.*;
 import mindustry.core.*;
 import mindustry.game.*;
 import mindustry.game.EventType.*;
-import mindustry.gen.*;
 import mindustry.net.*;
 import mindustry.net.Packets.*;
-import mindustry.ui.dialogs.*;
 import mindustryX.*;
 import mindustryX.features.SettingsV2.*;
 import mindustryX.features.ui.*;
@@ -19,6 +17,7 @@ import mindustryX.features.ui.*;
 import java.io.*;
 import java.text.*;
 import java.util.*;
+import java.util.concurrent.*;
 
 import static mindustry.Vars.*;
 import static mindustryX.features.UIExt.i;
@@ -33,31 +32,21 @@ public class ReplayController{
     private static final CheckPref enable = new CheckPref("replayRecord");
 
     public static boolean replaying;
+    public static float replayTime;
+    private static final ArrayBlockingQueue<Pair<Float, Packet>> packets = new ArrayBlockingQueue<>(256);
+    private static Thread replayThread;
 
     private static ReplayData.Writer writer;
     private static ReplayData.Reader reader;
-    private static ReplayManagerDialog managerDialog;
 
     public static void init(){
         Events.run(EventType.Trigger.update, () -> {
             if(replaying && state.isMenu() && !netClient.isConnecting()){
                 stopPlay();
             }
+            updateReplay();
         });
         Events.on(ClientServerConnectEvent.class, (e) -> stopPlay());
-        {
-            Table buttons = Vars.ui.join.buttons;
-            buttons.button(i("回放管理器"), Icon.file, ReplayController::showManagerDialog);
-        }
-        {
-            var pausedDialog = Vars.ui.paused;
-            pausedDialog.shown(() -> {
-                if(!replaying) return;
-                pausedDialog.cont.row()
-                .button(i("查看录制信息"), Icon.fileImage, ReplayController::showInfo).name("ReplayInfo")
-                .size(0, 60).colspan(pausedDialog.cont.getColumns()).fill();
-            });
-        }
     }
 
     public static void onConnect(String ip){
@@ -80,7 +69,8 @@ public class ReplayController{
     }
 
     public static void onClientPacket(Packet p){
-        if(writer == null) return;
+        //回放期间不能再录
+        if(writer == null || replaying) return;
         if(p instanceof Disconnect){
             writer.close();
             writer = null;
@@ -105,11 +95,16 @@ public class ReplayController{
             Log.infoTag("Replay", reader.getMeta().toString());
         }catch(Exception e){
             Core.app.post(() -> {
-                ReplayController.showManagerDialog();
+                ReplayWindow.showManagerDialog();
                 ui.showException(i("读取回放失败!"), e);
             });
             return;
         }
+
+        ReplayWindow.replayMeta = reader.getMeta();
+        ReplayWindow.presetPosition();
+        //旧 arc 格式的 version 不是游戏版本号，固定按 146 协议解析
+        LogicExt.mockProtocol = reader.getArcOldFormat() ? 146 : reader.getMeta().getVersion();
 
         replaying = true;
         ui.loadfrag.show("@connecting");
@@ -119,48 +114,94 @@ public class ReplayController{
         net.reset();
         netClient.beginConnecting();
         Reflect.set(net, "active", true);
+        packets.clear();
+        startReplayReader(reader);
+    }
 
-        Threads.daemon("Replay Controller", () -> {
-            float startTime = Time.time;
+    private static void startReplayReader(ReplayData.Reader reader){
+        if(replayThread!=null){
+            replayThread.interrupt();
+        }
+        replayThread = Threads.daemon("Replay Reader", () -> {
             try{
                 while(replaying){
                     var info = reader.nextPacket();//EOF
                     Packet packet = reader.readPacket(info);
-                    while(Time.time - startTime < info.getOffset())
-                        Thread.sleep(1);
-                    Core.app.post(() -> {
-                        if(!replaying) return;
-                        try{
-                            net.handleClientReceived(packet);
-                        }catch(Exception e){
-                            stopPlay();
-                            net.handleException(e);
-                        }
-                    });
+                    packets.put(new Pair<>(info.getOffset(), packet));
                 }
+            }catch(InterruptedException e){
+                //ignore
             }catch(EOFException e){
-                replaying = false;
-                Core.app.post(() -> {
-                    showInfo();
-                    stopPlay();
-                });
+                //TODO 游戏暂停，保活
             }catch(Exception e){
                 replaying = false;
                 stopPlay();
                 Core.app.post(() -> {
                     ui.showException("Replay Error", e);
                 });
+            }finally{
+                reader.close();
             }
         });
     }
 
+    private static void updateReplay(){
+        if(!replaying){
+            replayTime = 0f;
+            return;
+        }
+        replayTime += Time.delta;
+        for(int budget = 256; budget > 0 && replaying; budget--){
+            var p = packets.peek();
+            if(p == null || replayTime < p.getFirst()) return;//yield
+            p = packets.poll();
+            if(p == null) return;
+            try{
+                var packet = p.getSecond();
+                net.handleClientReceived(packet);
+                if(packet instanceof WorldStream) enterSpectator();
+            }catch(Exception e){
+                stopPlay();
+                net.handleException(e);
+            }
+        }
+    }
+
+    /** 世界加载完后 Vars.player 是录制者，改成观察者，录制者交给后续 snapshot 重建。 */
+    private static void enterSpectator(){
+        int oldId = player.id;
+        player.remove();
+        player.id = Integer.MAX_VALUE - 1;
+        player.team(Team.derelict);
+        player.add();
+        netClient.clearRemovedEntity(oldId);
+    }
+
+    public static void seekTo(float time){
+        if(time < replayTime){
+            var reader2 = reader.reopen();
+            if(reader2 == null) return;
+            reader = reader2;
+
+            if(replayThread!=null){
+                replayThread.interrupt();
+            }
+            NetClient.worldDataBegin();
+            packets.clear();
+            startReplayReader(reader);
+        }
+        replayTime = time;
+    }
+
     public static void stopPlay(){
-        boolean wasActive = replaying || reader != null;
+        boolean wasActive = replaying;
         if(wasActive) Log.infoTag("Replay", "stop");
         replaying = false;
-        if(reader != null){
-            reader.close();
-            reader = null;
+        LogicExt.mockProtocol = Version.build;
+        ReplayWindow.replayMeta = null;
+        if(replayThread!=null){
+            replayThread.interrupt();
+            replayThread = null;
         }
         if(!wasActive) return;
 
@@ -168,49 +209,20 @@ public class ReplayController{
         ui.loadfrag.hide();
         Core.app.post(() -> {
             logic.reset();
-            showManagerDialog();
+            ReplayWindow.showManagerDialog();
         });
     }
 
-    private static void showManagerDialog(){
-        if(managerDialog == null) managerDialog = new ReplayManagerDialog();
-        managerDialog.show();
-    }
 
-
-    public static void showInfo(){
-        BaseDialog dialog = new BaseDialog(i("回放统计"));
-        if(reader == null){
-            dialog.cont.add(i("未加载回放!"));
-            return;
+    /** 读取整条回放的包信息；没有回放或读失败返回 null。供 UI 统计使用，不向 UI 暴露文件。 */
+    public static List<ReplayData.PacketInfo> allPacketsInfo(){
+        Fi source = reader == null ? null : reader.getSource();
+        if(source == null) return null;
+        try(ReplayData.Reader r = new ReplayData.Reader(source)){
+            return r.allPacket();
+        }catch(Exception e){
+            Log.err(e);
+            return null;
         }
-        var replay = reader.getMeta();
-        dialog.cont.add(VarsX.bundle.playbackVersion(String.valueOf(replay.getVersion()))).row();
-        dialog.cont.add(VarsX.bundle.replayCreationTime(String.valueOf(replay.getTime()))).row();
-        dialog.cont.add(VarsX.bundle.serverIp(replay.getServerIp())).row();
-        dialog.cont.add(VarsX.bundle.playerName(replay.getRecordPlayer())).row();
-
-        if(reader.getSource() != null){
-            var tmpReader = new ReplayData.Reader(reader.getSource());
-            var packets = tmpReader.allPacket();
-            tmpReader.close();
-
-            dialog.cont.add(VarsX.bundle.packetCount(packets.size())).row();
-            if(!packets.isEmpty()){
-                int secs = (int)(packets.get(packets.size() - 1).getOffset() / 60);
-                dialog.cont.add(VarsX.bundle.playbackLength((secs / 3600) + ":" + (secs / 60 % 60) + ":" + (secs % 60))).row();
-            }
-            dialog.cont.pane(t -> {
-                t.defaults().pad(2);
-                for(var packet : packets){
-                    t.add(Strings.format("+@s", Strings.fixed(packet.getOffset() / 60f, 2)));
-                    t.add(Net.newPacket(packet.getId()).getClass().getSimpleName()).fillX();
-                    t.add("L=" + packet.getLength());
-                    t.row();
-                }
-            }).growX().row();
-        }
-        dialog.addCloseButton();
-        dialog.show();
     }
 }
