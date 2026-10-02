@@ -42,12 +42,12 @@ public class NewCoreItemsDisplay extends Table{
 
     private static final Interval timer = new Interval(2);
 
-    private final ItemModule itemDelta = new ItemModule();
-    private final ItemModule lastItemAmount = new ItemModule();
+    private ItemModule itemDelta = new ItemModule();
+    private ItemModule lastItemAmount = new ItemModule();
     public final ObjectSet<Item> usedItems = new ObjectSet<>();
     public final ObjectSet<UnitType> usedUnits = new ObjectSet<>();
 
-    private final ItemModule planItemAmounts = new ItemModule();
+    private ItemModule planItemAmounts = new ItemModule();
     private final ObjectIntMap<Block> planCounter = new ObjectIntMap<>();
 
     private final SettingsV2.Data<Boolean> showItem = new CheckPref("coreItems.showItem", true);
@@ -66,11 +66,11 @@ public class NewCoreItemsDisplay extends Table{
         });
 
         Events.on(WorldLoadEvent.class, e -> {
+            //recreate only when the item count actually changed; checkArrayCapacity would also wipe ItemModule's shared static flow caches
             int size = content.items().size;
-            ItemModule.empty.checkArrayCapacity(size);//Fix ItemModule.empty, used by team.item()
-            planItemAmounts.checkArrayCapacity(size);
-            itemDelta.checkArrayCapacity(size);
-            lastItemAmount.checkArrayCapacity(size);
+            if(planItemAmounts.length() != size) planItemAmounts = new ItemModule();
+            if(itemDelta.length() != size) itemDelta = new ItemModule();
+            if(lastItemAmount.length() != size) lastItemAmount = new ItemModule();
 
             itemsTable.clearChildren();
             unitsTable.clearChildren();
