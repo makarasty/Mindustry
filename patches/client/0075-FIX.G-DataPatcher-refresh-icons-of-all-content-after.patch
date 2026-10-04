@@ -6,11 +6,11 @@ Subject: [PATCH] FIX.G(DataPatcher) refresh icons of all content after data
 
 including internal units created by blocks (e.g. BuildTurret), so they always have a fallback icon
 ---
- core/src/mindustry/mod/DataPatcher.java | 17 +++++++++++++++++
- 1 file changed, 17 insertions(+)
+ core/src/mindustry/mod/DataPatcher.java | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
 
 diff --git a/core/src/mindustry/mod/DataPatcher.java b/core/src/mindustry/mod/DataPatcher.java
-index de6277bf9010a27163e23d1c01417343c3be57fb..1a834e106dd35e030c96efcb335bae64452002bd 100644
+index de6277bf9010a27163e23d1c01417343c3be57fb..efde5ae8c96d09d37fc274be23d802c5741f5907 100644
 --- a/core/src/mindustry/mod/DataPatcher.java
 +++ b/core/src/mindustry/mod/DataPatcher.java
 @@ -1,5 +1,6 @@
@@ -47,13 +47,3 @@ index de6277bf9010a27163e23d1c01417343c3be57fb..1a834e106dd35e030c96efcb335bae64
      }
  
      public void unapply(){
-@@ -362,6 +376,9 @@ public class DataPatcher{
-             }
-         }
- 
-+        //the shared empty module is created at class load time, so it may be smaller than the current item count
-+        ItemModule.empty.checkArrayCapacity(items);
-+
-         //TODO: this doesn't do anything about extensive ItemSeq usage across the codebase, which is limited to the campaign
-         //TODO: this also doesn't change sectors
-         needsArrayFix = false;
