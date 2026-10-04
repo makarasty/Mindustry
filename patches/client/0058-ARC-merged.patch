@@ -1678,7 +1678,7 @@ index 8e28ec23fd448e162ee19dc4920eb5c8916b92fc..759b1619f31e9ca4de155a8eed107758
          }
      }
 diff --git a/core/src/mindustry/ui/dialogs/SettingsMenuDialog.java b/core/src/mindustry/ui/dialogs/SettingsMenuDialog.java
-index 6e569225c9e5a5ee20d05b8660db24f2479f4199..1a2cd9338a4161383e811522d5e8ecea5432c8da 100644
+index b1b3056fa7641eb818ed7767928f4d35f5c343ea..56ce3929f3ad7ba2def21f2e509bf5e61f7359f5 100644
 --- a/core/src/mindustry/ui/dialogs/SettingsMenuDialog.java
 +++ b/core/src/mindustry/ui/dialogs/SettingsMenuDialog.java
 @@ -371,8 +371,8 @@ public class SettingsMenuDialog extends BaseDialog{
@@ -1770,7 +1770,7 @@ index c540dcd42b45140924793fdab1f021b3240f5b0c..54445cc4f7fea59ec444862bd3c0aef6
      }
  
 diff --git a/core/src/mindustry/ui/fragments/ConsoleFragment.java b/core/src/mindustry/ui/fragments/ConsoleFragment.java
-index e6bafff3bed8c99acaef93767267ac602ce83ea0..5a2647cd594d221ba7acdaf02c00954c256ba679 100644
+index 02c537de0b4d62800d6b66af0636623a1deac703..c901fbb481ea2b15a55deef2e0086eced924fa6f 100644
 --- a/core/src/mindustry/ui/fragments/ConsoleFragment.java
 +++ b/core/src/mindustry/ui/fragments/ConsoleFragment.java
 @@ -16,6 +16,7 @@ import mindustry.game.EventType.*;

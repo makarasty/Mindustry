@@ -35,7 +35,7 @@ index b6bcd7b54943a5ff9167088b82872fe26546f746..498188bb84cd10769afbde691a30b810
          Groups.draw.draw(RenderExt::onGroupDraw);
  
 diff --git a/core/src/mindustry/entities/Effect.java b/core/src/mindustry/entities/Effect.java
-index 3d948c538ea91437be30224408350cf6a29aedbd..341ca42edb3cdadba7cfe6fbb8a9b5e83a2f39c4 100644
+index 02e3f5170f8094307720f7cb40f2a722492e4558..50e73c5b7eb9c029c26a09a700fac4298b9d16da 100644
 --- a/core/src/mindustry/entities/Effect.java
 +++ b/core/src/mindustry/entities/Effect.java
 @@ -14,6 +14,7 @@ import mindustry.entities.effect.*;

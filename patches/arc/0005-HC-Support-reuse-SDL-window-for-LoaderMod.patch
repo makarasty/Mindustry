@@ -10,12 +10,12 @@ Subject: [PATCH] HC: Support reuse SDL-window for LoaderMod
  3 files changed, 31 insertions(+), 1 deletion(-)
 
 diff --git a/backends/backend-sdl/src/arc/backend/sdl/SdlApplication.java b/backends/backend-sdl/src/arc/backend/sdl/SdlApplication.java
-index 8db6a4dbe3ca4e7b704041600edba3b97a54f019..d1efd9c6259b77628226dab4bc4ebecffa1f06d4 100644
+index 19af8c4e23814cc5dfaf08a208251d3f56215989..ba30da29d5562d8c389cedab049501c96d530e17 100644
 --- a/backends/backend-sdl/src/arc/backend/sdl/SdlApplication.java
 +++ b/backends/backend-sdl/src/arc/backend/sdl/SdlApplication.java
-@@ -113,6 +113,21 @@ public class SdlApplication implements Application{
- 
-         if(OS.isMac) restartMac();
+@@ -115,6 +115,21 @@ public class SdlApplication implements Application{
+         //wayland is broken and newer SDL versions force it
+         if(OS.isLinux && !OS.hasEnvFlag("MINDUSTRY_FORCE_WAYLAND")) SDL_SetHint("SDL_VIDEO_DRIVER", "x11");
  
 +        //MDTX: Special handle for Loader
 +        if(System.getProperty("MDTX-SDL-window") != null){

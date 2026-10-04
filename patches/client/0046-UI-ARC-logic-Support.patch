@@ -43,7 +43,7 @@ JUMP按钮始终显示在积木内部(长短条一致)；短条模式下收缩�
  6 files changed, 165 insertions(+), 22 deletions(-)
 
 diff --git a/core/src/mindustry/logic/LCanvas.java b/core/src/mindustry/logic/LCanvas.java
-index 767af6ba1d1a438c98f093216d7cf5acd14c5903..554bfb9aac92d79349951754a00aaa95899e2ea7 100644
+index 767af6ba1d1a438c98f093216d7cf5acd14c5903..385650b1b9d910e824971f91154ac2ae2f8ec298 100644
 --- a/core/src/mindustry/logic/LCanvas.java
 +++ b/core/src/mindustry/logic/LCanvas.java
 @@ -18,6 +18,9 @@ import mindustry.gen.*;
