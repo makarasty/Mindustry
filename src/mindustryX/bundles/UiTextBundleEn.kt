@@ -303,6 +303,7 @@ internal object UiTextBundleEn : UiTextBundle {
         "查看录制信息" to "View recording info",
         "标记~坐标" to "Mark~Coordinates",
         "标记~玩家" to "Mark~Player",
+        "标记当前任务" to "Mark mission",
         "标记地图位置" to "Mark map location",
         "格" to "tiles",
         "检查更新失败，请稍后再试" to "Could not check for updates.\nPlease try again later.",
