@@ -244,8 +244,9 @@ public class MarkerType{
             }
         }
 
-        var exists = (MarkElement)Groups.draw.find(it -> it instanceof MarkElement e && e.message == null && e.within(pos.scl(tilesize), 2 * tilesize));
-        last = exists != null ? exists : type.at(pos.scl(tilesize));
+        pos.scl(tilesize);
+        var exists = (MarkElement)Groups.draw.find(it -> it instanceof MarkElement e && e.message == null && e.within(pos, 2 * tilesize));
+        last = exists != null ? exists : type.at(pos);
         last.message = text;
     }
 
