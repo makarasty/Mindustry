@@ -554,7 +554,7 @@ index 79e204a3d9e5b181c2b2da95e3d3f8900a75b391..ea64d4f16cde613986c16bbcdd848616
              unit.lookAt(unit.prefRotation());
          }
 diff --git a/core/src/mindustry/input/InputHandler.java b/core/src/mindustry/input/InputHandler.java
-index 7ef900f342fa500f3928aee4edb77fa880e082cb..7b2748e24cc6d0c7aa6400bf6df7d82049459231 100644
+index 30a026a229a84e15ca8b9e6f296241efb91fc3af..43f9ebac49912b5ce4797d2757fb4081601c85dd 100644
 --- a/core/src/mindustry/input/InputHandler.java
 +++ b/core/src/mindustry/input/InputHandler.java
 @@ -38,8 +38,10 @@ import mindustry.world.*;
@@ -576,7 +576,7 @@ index 7ef900f342fa500f3928aee4edb77fa880e082cb..7b2748e24cc6d0c7aa6400bf6df7d820
      private Seq<BuildPlan> plansOut = new Seq<>(BuildPlan.class);
      private QuadTree<BuildPlan> playerPlanTree = new QuadTree<>(new Rect());
      private QuadTree<BuildPlan> selectPlanTree = new QuadTree<>(new Rect());
-@@ -756,7 +759,7 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
+@@ -765,7 +768,7 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
              throw new ValidateException(player, "Player cannot control a building.");
          }
  
@@ -585,7 +585,7 @@ index 7ef900f342fa500f3928aee4edb77fa880e082cb..7b2748e24cc6d0c7aa6400bf6df7d820
              var before = player.unit();
  
              Call.unitBuildingControlSelect(player.unit(), build);
-@@ -945,7 +948,7 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
+@@ -954,7 +957,7 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
      }
  
      public void update(){
@@ -594,7 +594,7 @@ index 7ef900f342fa500f3928aee4edb77fa880e082cb..7b2748e24cc6d0c7aa6400bf6df7d820
              spectating = null;
          }
  
-@@ -1183,6 +1186,8 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
+@@ -1192,6 +1195,8 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
                      attack = selectedEnemyUnit(target.x, target.y);
                  }
  
@@ -603,7 +603,7 @@ index 7ef900f342fa500f3928aee4edb77fa880e082cb..7b2748e24cc6d0c7aa6400bf6df7d820
                  int[] ids = new int[selectedUnits.size];
                  for(int i = 0; i < ids.length; i++){
                      ids[i] = selectedUnits.get(i).id;
-@@ -1561,6 +1566,11 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
+@@ -1570,6 +1575,11 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
          });
      }
  
@@ -615,7 +615,7 @@ index 7ef900f342fa500f3928aee4edb77fa880e082cb..7b2748e24cc6d0c7aa6400bf6df7d820
      public void rotatePlans(Seq<BuildPlan> plans, int direction){
          int ox = schemOriginX(), oy = schemOriginY();
  
-@@ -1596,6 +1606,20 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
+@@ -1605,6 +1615,20 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
              plan.x = World.toTile(wx - plan.block.offset) + ox;
              plan.y = World.toTile(wy - plan.block.offset) + oy;
              plan.rotation = plan.block.planRotation(Mathf.mod(plan.rotation + direction, 4));
@@ -636,7 +636,7 @@ index 7ef900f342fa500f3928aee4edb77fa880e082cb..7b2748e24cc6d0c7aa6400bf6df7d820
          });
      }
  
-@@ -1625,6 +1649,17 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
+@@ -1634,6 +1658,17 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
  
              //flip rotation
              plan.block.flipRotation(plan, x);
@@ -654,7 +654,7 @@ index 7ef900f342fa500f3928aee4edb77fa880e082cb..7b2748e24cc6d0c7aa6400bf6df7d820
          });
      }
  
-@@ -1797,6 +1832,9 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
+@@ -1806,6 +1841,9 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
              font.setUseIntegerPositions(ints);
              Draw.z(z);
          }
@@ -664,7 +664,7 @@ index 7ef900f342fa500f3928aee4edb77fa880e082cb..7b2748e24cc6d0c7aa6400bf6df7d820
      }
  
      protected void flushSelectPlans(Seq<BuildPlan> plans){
-@@ -2171,7 +2209,7 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
+@@ -2180,7 +2218,7 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
  
      public @Nullable Building selectedControlBuild(){
          Building build = world.buildWorld(Core.input.mouseWorld().x, Core.input.mouseWorld().y);
@@ -673,7 +673,7 @@ index 7ef900f342fa500f3928aee4edb77fa880e082cb..7b2748e24cc6d0c7aa6400bf6df7d820
              return build;
          }
          return null;
-@@ -2274,6 +2312,9 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
+@@ -2283,6 +2321,9 @@ public abstract class InputHandler implements InputProcessor, GestureListener{
  
      public boolean canShoot(){
          if(player.dead()) return false;
@@ -1678,7 +1678,7 @@ index 8e28ec23fd448e162ee19dc4920eb5c8916b92fc..759b1619f31e9ca4de155a8eed107758
          }
      }
 diff --git a/core/src/mindustry/ui/dialogs/SettingsMenuDialog.java b/core/src/mindustry/ui/dialogs/SettingsMenuDialog.java
-index 6e569225c9e5a5ee20d05b8660db24f2479f4199..1a2cd9338a4161383e811522d5e8ecea5432c8da 100644
+index b1b3056fa7641eb818ed7767928f4d35f5c343ea..56ce3929f3ad7ba2def21f2e509bf5e61f7359f5 100644
 --- a/core/src/mindustry/ui/dialogs/SettingsMenuDialog.java
 +++ b/core/src/mindustry/ui/dialogs/SettingsMenuDialog.java
 @@ -371,8 +371,8 @@ public class SettingsMenuDialog extends BaseDialog{
@@ -1770,7 +1770,7 @@ index c540dcd42b45140924793fdab1f021b3240f5b0c..54445cc4f7fea59ec444862bd3c0aef6
      }
  
 diff --git a/core/src/mindustry/ui/fragments/ConsoleFragment.java b/core/src/mindustry/ui/fragments/ConsoleFragment.java
-index e6bafff3bed8c99acaef93767267ac602ce83ea0..5a2647cd594d221ba7acdaf02c00954c256ba679 100644
+index 02c537de0b4d62800d6b66af0636623a1deac703..c901fbb481ea2b15a55deef2e0086eced924fa6f 100644
 --- a/core/src/mindustry/ui/fragments/ConsoleFragment.java
 +++ b/core/src/mindustry/ui/fragments/ConsoleFragment.java
 @@ -16,6 +16,7 @@ import mindustry.game.EventType.*;
@@ -1897,7 +1897,7 @@ index 5509cfb471cd5297a5e5d213b894ab9f85db40c1..8dabb1815bd43f1fa88444b6aa3acf9f
      }
  
 diff --git a/core/src/mindustry/ui/fragments/PlacementFragment.java b/core/src/mindustry/ui/fragments/PlacementFragment.java
-index 135482c2c2f4ae1feb2a0c0ddc4b48feb1bf55d9..a638a39be12d832ccd4895d7add48db4267c68c6 100644
+index e053ffdc22c9036b87dafba6a7b5770bb217ec47..90dacd0f7c2d8e476c22fb1b4767aa017fbb2526 100644
 --- a/core/src/mindustry/ui/fragments/PlacementFragment.java
 +++ b/core/src/mindustry/ui/fragments/PlacementFragment.java
 @@ -1,6 +1,7 @@
@@ -2025,7 +2025,7 @@ index 135482c2c2f4ae1feb2a0c0ddc4b48feb1bf55d9..a638a39be12d832ccd4895d7add48db4
                              if(units.size > 0){
                                  usedCommands.clear();
 @@ -587,7 +620,7 @@ public class PlacementFragment{
-                                                 Call.setUnitCommand(player, units.mapInt(un -> un.id, un -> un.type.allowCommand(un, command)).toArray(), command);
+                                                 InputHandler.setUnitCommandChunked(units.mapInt(un -> un.id, un -> un.type.allowCommand(un, command)), command);
                                              }).checked(i -> activeCommands.get(command.id)).size(50f).tooltip(command.localized(), true);
  
 -                                            if(++scol % 6 == 0) coms.row();
@@ -2034,7 +2034,7 @@ index 135482c2c2f4ae1feb2a0c0ddc4b48feb1bf55d9..a638a39be12d832ccd4895d7add48db4
  
                                      }).fillX().padTop(4f).left();
 @@ -610,13 +643,67 @@ public class PlacementFragment{
-                                                 Call.setUnitStance(player, units.mapInt(un -> un.id, un -> un.type.allowStance(un, stance)).toArray(), stance, !activeStances.get(stance.id));
+                                                 InputHandler.setUnitStanceChunked(units.mapInt(un -> un.id, un -> un.type.allowStance(un, stance)), stance, !activeStances.get(stance.id));
                                              }).checked(i -> activeStances.get(stance.id)).size(50f).tooltip(stance.localized(), true);
  
 -                                            if(++scol % 6 == 0) coms.row();

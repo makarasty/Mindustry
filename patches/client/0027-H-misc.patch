@@ -31,7 +31,7 @@ Content-Transfer-Encoding: 8bit
  20 files changed, 82 insertions(+), 49 deletions(-)
 
 diff --git a/core/src/mindustry/ClientLauncher.java b/core/src/mindustry/ClientLauncher.java
-index 1d3b146ab2810e748f0bdb2563efd86de76df9d2..db74a378bd3c00295842f5f5b215c8d059bbd241 100644
+index d8139df46a96e3eb7527e63f5db9f98faffba384..827f1c5e1615d61cb07b52912d6695584d9abf92 100644
 --- a/core/src/mindustry/ClientLauncher.java
 +++ b/core/src/mindustry/ClientLauncher.java
 @@ -40,6 +40,10 @@ public abstract class ClientLauncher extends ApplicationCore implements Platform
@@ -45,7 +45,7 @@ index 1d3b146ab2810e748f0bdb2563efd86de76df9d2..db74a378bd3c00295842f5f5b215c8d0
          if(dataDir != null){
              Core.settings.setDataDirectory(files.absolute(dataDir));
          }
-@@ -260,10 +264,14 @@ public abstract class ClientLauncher extends ApplicationCore implements Platform
+@@ -263,10 +267,14 @@ public abstract class ClientLauncher extends ApplicationCore implements Platform
          }
  
          if(limitFps){
@@ -362,7 +362,7 @@ index bb0442435f9f7c0f2472eec9f4844188a5ff4d9f..4eb699715bbf1ac89f310dbb97caf46b
              return;
          }else if(checkPlaytest()){
 diff --git a/core/src/mindustry/ui/dialogs/SettingsMenuDialog.java b/core/src/mindustry/ui/dialogs/SettingsMenuDialog.java
-index 7d502cae408bf6db57f9af7eb9b1a6a7af8518b1..6e569225c9e5a5ee20d05b8660db24f2479f4199 100644
+index eec97c1a3433ea772705b191e890880887eab8df..b1b3056fa7641eb818ed7767928f4d35f5c343ea 100644
 --- a/core/src/mindustry/ui/dialogs/SettingsMenuDialog.java
 +++ b/core/src/mindustry/ui/dialogs/SettingsMenuDialog.java
 @@ -464,14 +464,14 @@ public class SettingsMenuDialog extends BaseDialog{
@@ -422,7 +422,7 @@ index f319d4b84be6530116f372674363896c095e3f26..c540dcd42b45140924793fdab1f021b3
          team("/t"),
          admin("/a", player::admin)
 diff --git a/core/src/mindustry/ui/fragments/PlacementFragment.java b/core/src/mindustry/ui/fragments/PlacementFragment.java
-index 04b3c75ef2f94417c5d51564862627460cae8494..07deebd06e7d0383cbd7e1f7b88f221b11fd20b2 100644
+index 22323b3a066e7a8d818b37a66812d853ed9fb2f0..aa9b96af93d5f70a1ac0771516a017b699d0e7d5 100644
 --- a/core/src/mindustry/ui/fragments/PlacementFragment.java
 +++ b/core/src/mindustry/ui/fragments/PlacementFragment.java
 @@ -788,10 +788,8 @@ public class PlacementFragment{

@@ -352,7 +352,7 @@ index 0000000000000000000000000000000000000000..6e87ee9f906947eb937b9e3eaf371784
 +    }
 +}
 diff --git a/core/src/mindustry/mod/ModClassLoader.java b/core/src/mindustry/mod/ModClassLoader.java
-index d9c05036f9715933ef293511a2069d65312d01fc..8d3a22272e38698dac6d9f0c74ffd4932e3a4fc2 100644
+index 7cf8fc70925879b03841a0d4104e8a9c33758e4c..0967b945496c125498bb2d6488075e4cdafed65e 100644
 --- a/core/src/mindustry/mod/ModClassLoader.java
 +++ b/core/src/mindustry/mod/ModClassLoader.java
 @@ -1,6 +1,7 @@
@@ -362,8 +362,8 @@ index d9c05036f9715933ef293511a2069d65312d01fc..8d3a22272e38698dac6d9f0c74ffd493
 +import java.net.*;
  
  public class ModClassLoader extends ClassLoader{
-     private Seq<ClassLoader> children = new Seq<>();
-@@ -46,4 +47,10 @@ public class ModClassLoader extends ClassLoader{
+     static{
+@@ -54,4 +55,10 @@ public class ModClassLoader extends ClassLoader{
  
          throw (last == null ? new ClassNotFoundException(name) : last);
      }

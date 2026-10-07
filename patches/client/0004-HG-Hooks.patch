@@ -11,7 +11,7 @@ Subject: [PATCH] HG: Hooks
  4 files changed, 7 insertions(+)
 
 diff --git a/core/src/mindustry/ClientLauncher.java b/core/src/mindustry/ClientLauncher.java
-index 70fb6a43b7a4f056ccf37f6096969d6d91da75c2..1d3b146ab2810e748f0bdb2563efd86de76df9d2 100644
+index 640b126e40c655b702694c47060dcbaee6c162e1..d8139df46a96e3eb7527e63f5db9f98faffba384 100644
 --- a/core/src/mindustry/ClientLauncher.java
 +++ b/core/src/mindustry/ClientLauncher.java
 @@ -180,6 +180,7 @@ public abstract class ClientLauncher extends ApplicationCore implements Platform
@@ -57,10 +57,10 @@ index b208ac04a889352f3a60c8f93a2869cbfdb045dd..a458479282395d0521a511480d0be59c
              Vars.ui.chatfrag.addMessage(message);
              Sounds.uiChat.play();
 diff --git a/server/src/mindustry/server/ServerLauncher.java b/server/src/mindustry/server/ServerLauncher.java
-index d8737fc5e1f449c7b0d093e6c2de3b9722952481..0f23c39ad937d6ead6e3657eb57a0c725ec84b56 100644
+index 72a752867629b711eaada59620983ec43364dba0..92bf28930ba9d5bb0fc85956202f9ff21c756001 100644
 --- a/server/src/mindustry/server/ServerLauncher.java
 +++ b/server/src/mindustry/server/ServerLauncher.java
-@@ -76,6 +76,7 @@ public class ServerLauncher implements ApplicationListener{
+@@ -77,6 +77,7 @@ public class ServerLauncher implements ApplicationListener{
          Core.app.addListener(netServer = new NetServer());
          Core.app.addListener(new ServerControl(args));
          Core.app.addListener(new ApplicationListener(){public void update(){ asyncCore.end(); }});

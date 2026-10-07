@@ -13,7 +13,7 @@ Content-Transfer-Encoding: 8bit
  1 file changed, 3 insertions(+)
 
 diff --git a/core/src/mindustry/async/PhysicsProcess.java b/core/src/mindustry/async/PhysicsProcess.java
-index 544166f25e67833ddd52eb98646f1c41ef270211..548e9ff923aaaa3c4bbab46df615381d97d9254b 100644
+index 5a7468af9fb2a2f9ea0767671ee813c1865180ed..a3d349f6c9226b6781a6b099ef7988c877e05806 100644
 --- a/core/src/mindustry/async/PhysicsProcess.java
 +++ b/core/src/mindustry/async/PhysicsProcess.java
 @@ -1,5 +1,6 @@
@@ -23,7 +23,7 @@ index 544166f25e67833ddd52eb98646f1c41ef270211..548e9ff923aaaa3c4bbab46df615381d
  import arc.math.*;
  import arc.math.geom.*;
  import arc.math.geom.QuadTree.*;
-@@ -72,6 +73,8 @@ public class PhysicsProcess implements AsyncProcess{
+@@ -81,6 +82,8 @@ public class PhysicsProcess implements AsyncProcess{
          for(PhysicRef ref : refs){
              Physicsc entity = ref.entity;
  

@@ -10,7 +10,7 @@ Subject: [PATCH] H.API: add LogicAssembledEvent
  3 files changed, 17 insertions(+), 1 deletion(-)
 
 diff --git a/core/src/mindustry/logic/LParser.java b/core/src/mindustry/logic/LParser.java
-index dcc86b8f92be839fc4c6bce355630176f885dc43..1d80f5b9e537bb1ebbca580142f42e50128048e1 100644
+index 9893fe8b758cfeb218be16421c3c8aea90b86911..f0f2f7cebcef9f54f2e12a4be9cf4d4d492a1efa 100644
 --- a/core/src/mindustry/logic/LParser.java
 +++ b/core/src/mindustry/logic/LParser.java
 @@ -6,6 +6,8 @@ import mindustry.*;

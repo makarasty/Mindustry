@@ -18,7 +18,7 @@ Content-Transfer-Encoding: 8bit
  6 files changed, 16 insertions(+)
 
 diff --git a/core/src/mindustry/world/blocks/distribution/DirectionalUnloader.java b/core/src/mindustry/world/blocks/distribution/DirectionalUnloader.java
-index 6f944e48554227533c9dd650e231b83e3d28d9cd..5e14488a6736bfe18c59b7ca6b652b3bac253ece 100644
+index ea582c7271f00e880e6e038841686e209f0d7a0c..257662a819acd141414f9da9d8ade0e6abffa435 100644
 --- a/core/src/mindustry/world/blocks/distribution/DirectionalUnloader.java
 +++ b/core/src/mindustry/world/blocks/distribution/DirectionalUnloader.java
 @@ -14,6 +14,7 @@ import mindustry.world.blocks.*;
