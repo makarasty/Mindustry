@@ -111,7 +111,7 @@ index b732a03240a7f935ff435db272336f01d8e64d9a..541a0f9c8baf44ce9ed8595901c706a4
              if(mode == placing && block != null){ //touch up while placing, place everything in selection
                  if(input.keyDown(Binding.boost)){
 diff --git a/core/src/mindustry/input/InputHandler.java b/core/src/mindustry/input/InputHandler.java
-index 1a7b6a5e29b1756ad7233bd8257ee35b2d85c7ef..30a026a229a84e15ca8b9e6f296241efb91fc3af 100644
+index 8047d4354bdbf1cce941f9bf96bca52857038d01..1ba7256ebde565e11895c73fa82afd64a1caadb1 100644
 --- a/core/src/mindustry/input/InputHandler.java
 +++ b/core/src/mindustry/input/InputHandler.java
 @@ -2282,6 +2282,7 @@ public abstract class InputHandler implements InputProcessor, GestureListener{

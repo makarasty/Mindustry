@@ -8,7 +8,7 @@ Subject: [PATCH] FR(RenderExt) unitHide
  1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/core/src/mindustry/input/InputHandler.java b/core/src/mindustry/input/InputHandler.java
-index 111a087219d03d5d6613cec4af296cf400ccd048..1a7b6a5e29b1756ad7233bd8257ee35b2d85c7ef 100644
+index bfacbe41733b5c13a980bae7cacf6508c363f3fb..8047d4354bdbf1cce941f9bf96bca52857038d01 100644
 --- a/core/src/mindustry/input/InputHandler.java
 +++ b/core/src/mindustry/input/InputHandler.java
 @@ -41,6 +41,7 @@ import mindustry.world.blocks.distribution.*;

@@ -554,7 +554,7 @@ index 79e204a3d9e5b181c2b2da95e3d3f8900a75b391..ea64d4f16cde613986c16bbcdd848616
              unit.lookAt(unit.prefRotation());
          }
 diff --git a/core/src/mindustry/input/InputHandler.java b/core/src/mindustry/input/InputHandler.java
-index 30a026a229a84e15ca8b9e6f296241efb91fc3af..43f9ebac49912b5ce4797d2757fb4081601c85dd 100644
+index 1ba7256ebde565e11895c73fa82afd64a1caadb1..937063bfcf13b4d824f917c9944501cb69806adf 100644
 --- a/core/src/mindustry/input/InputHandler.java
 +++ b/core/src/mindustry/input/InputHandler.java
 @@ -38,8 +38,10 @@ import mindustry.world.*;
