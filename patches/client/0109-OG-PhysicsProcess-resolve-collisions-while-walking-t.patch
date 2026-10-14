@@ -1,0 +1,133 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 18:42:28 +0300
+Subject: [PATCH] OG(PhysicsProcess): resolve collisions while walking the body
+ tree instead of listing overlaps first
+
+---
+ core/src/mindustry/async/PhysicsProcess.java | 85 ++++++++++++--------
+ 1 file changed, 50 insertions(+), 35 deletions(-)
+
+diff --git a/core/src/mindustry/async/PhysicsProcess.java b/core/src/mindustry/async/PhysicsProcess.java
+index eede01d84ff7c96cbd6bd03c2daec04bcbec36dc..4e93e01152d66fa26fb485c6021661669692ec09 100644
+--- a/core/src/mindustry/async/PhysicsProcess.java
++++ b/core/src/mindustry/async/PhysicsProcess.java
+@@ -168,9 +168,8 @@ public class PhysicsProcess implements AsyncProcess{
+         //how much to soften movement by
+         private static final float scl = 1.25f;
+ 
+-        private final QuadTree<PhysicsBody> tree;
++        private final BodyTree tree;
+         private final Seq<PhysicsBody> bodies = new Seq<>(false, 16, PhysicsBody.class);
+-        private final Seq<PhysicsBody> seq = new Seq<>(PhysicsBody.class);
+         private final Vec2 vec = new Vec2();
+         private final Rand rand = new Rand();
+ 
+@@ -206,51 +205,48 @@ public class PhysicsProcess implements AsyncProcess{
+                     //for clients, the only body that collides is the local one; all other physics simulations are handled by the server.
+                     if(!body.local) continue;
+ 
+-                    seq.size = 0;
+-                    tree.intersect(body.x - body.radius, body.y - body.radius, body.radius * 2, body.radius * 2, seq);
+-                    int size = seq.size;
+-                    var items = seq.items;
++                    //MDTX: resolve each pair while walking the tree instead of listing the overlaps first. Same pairs in the same
++                    //order: the query rect is fixed, and a body is moved only after its own overlap check, as each is visited once
++                    tree.collide(this, body, body.x - body.radius, body.y - body.radius, body.radius * 2, body.radius * 2);
+ 
+-                    for(int j = 0; j < size; j++){
+-                        PhysicsBody other = items[j];
++                    body.collided = true;
++                }
++            }
+ 
+-                        if(other == body || other.collided) continue;
++            maxPhysicsTime = Math.max(maxPhysicsTime, Time.timeSinceNanos(begin));
++        }
+ 
+-                        float rs = body.radius + other.radius;
+-                        float dx = body.x - other.x, dy = body.y - other.y;
+-                        float dst2 = dx * dx + dy * dy;
++        void collide(PhysicsBody body, PhysicsBody other){
++            if(other == body || other.collided) return;
+ 
+-                        //skip the sqrt entirely for non-colliding pairs
+-                        if(dst2 < rs * rs){
+-                            float dst = Mathf.sqrt(dst2);
+-                            vec.set(dx, dy);
++            float rs = body.radius + other.radius;
++            float dx = body.x - other.x, dy = body.y - other.y;
++            float dst2 = dx * dx + dy * dy;
+ 
+-                            if(vec.isZero()){ //exact stacked bodies will move in random directions away from each other
+-                                vec.trns(rand.random(360f), rs - dst);
+-                            }else{
+-                                vec.setLength(rs - dst);
+-                            }
++            //skip the sqrt entirely for non-colliding pairs
++            if(dst2 < rs * rs){
++                float dst = Mathf.sqrt(dst2);
++                vec.set(dx, dy);
+ 
+-                            float ms = body.mass + other.mass;
+-                            float m1 = other.mass / ms, m2 = body.mass / ms;
++                if(vec.isZero()){ //exact stacked bodies will move in random directions away from each other
++                    vec.trns(rand.random(360f), rs - dst);
++                }else{
++                    vec.setLength(rs - dst);
++                }
+ 
+-                            //first body is always local due to guard check above
+-                            body.x += vec.x * m1 / scl;
+-                            body.y += vec.y * m1 / scl;
++                float ms = body.mass + other.mass;
++                float m1 = other.mass / ms, m2 = body.mass / ms;
+ 
+-                            if(other.local){
+-                                other.x -= vec.x * m2 / scl;
+-                                other.y -= vec.y * m2 / scl;
++                //first body is always local due to guard check in update()
++                body.x += vec.x * m1 / scl;
++                body.y += vec.y * m1 / scl;
+ 
+-                            }
+-                        }
+-                    }
++                if(other.local){
++                    other.x -= vec.x * m2 / scl;
++                    other.y -= vec.y * m2 / scl;
+ 
+-                    body.collided = true;
+                 }
+             }
+-
+-            maxPhysicsTime = Math.max(maxPhysicsTime, Time.timeSinceNanos(begin));
+         }
+ 
+         /** Same hitbox as QuadTree, but its own call site: the shared one sees every tree's element type and is megamorphic. */
+@@ -268,6 +264,25 @@ public class PhysicsProcess implements AsyncProcess{
+             protected QuadTree<PhysicsBody> newChild(Rect rect){
+                 return new BodyTree(rect);
+             }
++
++            /** Visits overlapping bodies in the same order as {@link #intersect(float, float, float, float, Seq)}. */
++            void collide(PhysicsWorld world, PhysicsBody body, float x, float y, float width, float height){
++                if(!leaf){
++                    if(topLeft.bounds.overlaps(x, y, width, height)) ((BodyTree)topLeft).collide(world, body, x, y, width, height);
++                    if(topRight.bounds.overlaps(x, y, width, height)) ((BodyTree)topRight).collide(world, body, x, y, width, height);
++                    if(botLeft.bounds.overlaps(x, y, width, height)) ((BodyTree)botLeft).collide(world, body, x, y, width, height);
++                    if(botRight.bounds.overlaps(x, y, width, height)) ((BodyTree)botRight).collide(world, body, x, y, width, height);
++                }
++
++                Object[] items = objects.items;
++                for(int i = 0; i < objects.size; i++){
++                    PhysicsBody other = (PhysicsBody)items[i];
++                    other.hitbox(tmp);
++                    if(tmp.overlaps(x, y, width, height)){
++                        world.collide(body, other);
++                    }
++                }
++            }
+         }
+ 
+         public static class PhysicsBody implements QuadTreeObject{

@@ -67,6 +67,12 @@ GC choice, measured on `war` with 30 players and the fleet's `-Xmx1024M`: `-XX:+
 the main thread from 3.96 to 3.51 ms per tick (-11%) and the whole process from 5.88 to 5.33 ms (-9%). No code;
 a line in `run.sh`. On the fleet's 2-core VPS with nine JVMs, G1's concurrent threads and barriers buy nothing.
 
+Correction (round 3): measured again like the fleet, with `-XX:ActiveProcessorCount=2`, JDK 21 and `-Xmx1024M` on
+`war` with 30 players, SerialGC's young pauses were 50-100 ms every ~20 s (35 MB survives each collection), against
+5-7 ms for G1, and the CPU difference was inside the noise. A 100 ms pause is a visible stutter and a ping spike, so
+keep G1. `-Xms32m -XX:G1PeriodicGCInterval=30000` changed nothing measurable on an idle server (~190 MB private, of
+which ~46 MB is live heap; the rest is metaspace, code cache and thread stacks).
+
 ## Not done, and why
 
 - Building world data for a joining player off the main thread: packets sent while it compresses would reach the
@@ -88,6 +94,11 @@ main-thread stall is also a ping spike: a client's ping is answered from the ser
 | 0106 `OS(NetServer)` | World data is serialized on the main thread and deflated and sent on one "World Data" thread. | Packets sent meanwhile reach the client before the world; a loading client queues normal ones and replays them after loading, and they already overtake a stream being sent. One thread keeps world streams in order. | Foo's Client (v160.5) join and `/sync` on stressA |
 | 0107 `OS(NetServer)` | The 6 s block snapshot goes out in 30 slices 0.2 s apart. | Each building is still sent once per 6 s; the client applies entries independently. Buildings placed during a cycle wait for the next one; the queue is cleared on world load. | the same client session, no "Skipping block snapshot" |
 | 0108 `OS(ServerControl)` | Autosave serializes on the main thread, deflates and writes on an "Autosave" thread into `autotmp_*`, then moves the file. The next autosave waits for the last write. | Bytes captured on the main thread; rotation and `loadautosave` only see `auto_*` files. | local server, two autosaves and rotation |
+
+| 0109 `OG(PhysicsProcess)` | Unit collisions are resolved while walking the body tree, without first copying the overlaps into a list (40% of the physics thread was that copy). | Same pairs in the same order: the query rect is passed by value and each body sits in the tree once, so it is checked before anything moves it. | hash on `stack` (900 ticks) and `war` (600 ticks); a mutant that visits a node's own bodies before its children diverges from tick 1 |
+
+0109 on `stack`, 5 interleaved rounds: whole process 7.10 to 6.76 ms per tick (-5%); on `war` it is inside the noise
+(the main thread there is unit AI, not physics).
 
 Main-thread time on stressA (`-Dbench.saves`, loaded machine): world data for a join 820 to 152 ms (-81%), repeat
 autosave 1113 to ~150 ms (-87%).
