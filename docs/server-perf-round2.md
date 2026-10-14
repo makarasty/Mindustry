@@ -78,6 +78,20 @@ a line in `run.sh`. On the fleet's 2-core VPS with nine JVMs, G1's concurrent th
   `draw` (what is left is the first cache miss on each of the 5.9k executors).
 - Upstream after v160.7 has no performance fixes to pick.
 
+## Round 3: freezes off the main thread
+
+Deflating is ~70% of an autosave and of the world data for a joining player (stressA: 0.78 s of 1.1 s). Every
+main-thread stall is also a ping spike: a client's ping is answered from the server's main thread.
+
+| Patch | Change | Why it is safe | Checked by |
+|---|---|---|---|
+| 0106 `OS(NetServer)` | World data is serialized on the main thread and deflated and sent on one "World Data" thread. | Packets sent meanwhile reach the client before the world; a loading client queues normal ones and replays them after loading, and they already overtake a stream being sent. One thread keeps world streams in order. | Foo's Client (v160.5) join and `/sync` on stressA |
+| 0107 `OS(NetServer)` | The 6 s block snapshot goes out in 30 slices 0.2 s apart. | Each building is still sent once per 6 s; the client applies entries independently. Buildings placed during a cycle wait for the next one; the queue is cleared on world load. | the same client session, no "Skipping block snapshot" |
+| 0108 `OS(ServerControl)` | Autosave serializes on the main thread, deflates and writes on an "Autosave" thread into `autotmp_*`, then moves the file. The next autosave waits for the last write. | Bytes captured on the main thread; rotation and `loadautosave` only see `auto_*` files. | local server, two autosaves and rotation |
+
+Main-thread time on stressA (`-Dbench.saves`, loaded machine): world data for a join 820 to 152 ms (-81%), repeat
+autosave 1113 to ~150 ms (-87%).
+
 ## After an update
 
 ```

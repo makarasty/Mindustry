@@ -1,0 +1,88 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 18:14:47 +0300
+Subject: [PATCH] OS(ServerControl): deflate and write autosaves off the main
+ thread
+
+---
+ .../src/mindustry/server/ServerControl.java   | 49 +++++++++++++++----
+ 1 file changed, 39 insertions(+), 10 deletions(-)
+
+diff --git a/server/src/mindustry/server/ServerControl.java b/server/src/mindustry/server/ServerControl.java
+index 99d61383e9d6f754da6686b74a14679b41cccd58..a72d8048098b1401973b878d8d8560ae2700b650 100644
+--- a/server/src/mindustry/server/ServerControl.java
++++ b/server/src/mindustry/server/ServerControl.java
+@@ -58,6 +58,8 @@ public class ServerControl implements ApplicationListener{
+     public final Fi logFolder = Core.settings.getDataDirectory().child("logs/");
+ 
+     private final Interval autosaveCount = new Interval();
++    private java.util.concurrent.ExecutorService autosaveWriter;
++    private volatile boolean autosaving;
+ 
+     /** The file to which the logs are currently being written. */
+     public Fi currentLogFile;
+@@ -289,7 +291,8 @@ public class ServerControl implements ApplicationListener{
+         //autosave periodically
+         Events.run(Trigger.update, () -> {
+             if(state.isPlaying() && Config.autosave.bool()){
+-                if(autosaveCount.get(Config.autosaveSpacing.num() * 60)){
++                //MDTX: wait while the last autosave is still writing, so a slow disk cannot pile up whole worlds in memory
++                if(!autosaving && autosaveCount.get(Config.autosaveSpacing.num() * 60)){
+                     int max = Config.autosaveAmount.num();
+ 
+                     //use map file name to make sure it can be saved
+@@ -298,19 +301,45 @@ public class ServerControl implements ApplicationListener{
+ 
+                     String fileName = "auto_" + mapName + "_" + date + "." + saveExtension;
+                     Fi file = saveDirectory.child(fileName);
++                    //MDTX: not named auto_, so rotation and loadautosave never see a half-written save
++                    Fi temp = saveDirectory.child("autotmp_" + fileName);
++
+                     info("Autosaving...");
+ 
++                    //MDTX: deflating was ~70% of the autosave freeze; serialize here, deflate and write on another thread
+                     try{
+-                        SaveIO.save(file);
+-                        info("Autosave completed.");
+-
+-                        //MDTX: rotate after a successful write, newest first by the exact time (a float sort key rounds lastModified to ~2 minutes)
+-                        Seq<Fi> autosaves = saveDirectory.findAll(f -> f.name().startsWith("auto_"));
+-                        autosaves.sort((a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+-                        for(int i = Math.max(max, 1); i < autosaves.size; i++){
+-                            autosaves.get(i).delete();
+-                        }
++                        var raw = new ByteArrayOutputStream();
++                        SaveIO.write(new BufferedOutputStream(raw, 1 << 16), new SaveOptions());
++
++                        autosaving = true;
++                        if(autosaveWriter == null) autosaveWriter = Threads.executor("Autosave", 1);
++                        autosaveWriter.execute(() -> {
++                            try{
++                                //left behind when the process stopped during a write
++                                saveDirectory.findAll(f -> f.name().startsWith("autotmp_")).each(Fi::delete);
++                                try(OutputStream os = new arc.util.io.FastDeflaterOutputStream(temp.write(false, 1 << 16))){
++                                    raw.writeTo(os);
++                                }
++                                temp.moveTo(file);
++                                Core.app.post(() -> {
++                                    info("Autosave completed.");
++
++                                    //MDTX: rotate after a successful write, newest first by the exact time (a float sort key rounds lastModified to ~2 minutes)
++                                    Seq<Fi> autosaves = saveDirectory.findAll(f -> f.name().startsWith("auto_"));
++                                    autosaves.sort((a, b) -> Long.compare(b.lastModified(), a.lastModified()));
++                                    for(int i = Math.max(max, 1); i < autosaves.size; i++){
++                                        autosaves.get(i).delete();
++                                    }
++                                });
++                            }catch(Throwable e){
++                                temp.delete();
++                                Core.app.post(() -> err("Autosave failed.", e));
++                            }finally{
++                                autosaving = false;
++                            }
++                        });
+                     }catch(Throwable e){
++                        autosaving = false;
+                         err("Autosave failed.", e);
+                     }
+                 }

@@ -1,0 +1,51 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 18:14:46 +0300
+Subject: [PATCH] OS(NetServer): deflate world data for a joining player off
+ the main thread
+
+---
+ core/src/mindustry/core/NetServer.java | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/core/src/mindustry/core/NetServer.java b/core/src/mindustry/core/NetServer.java
+index 65f3433b3e236d78981a6724d898185d2402b5d7..089d66ad999f1d1a33c030154b5fa0dc5d51599e 100644
+--- a/core/src/mindustry/core/NetServer.java
++++ b/core/src/mindustry/core/NetServer.java
+@@ -52,6 +52,8 @@ public class NetServer implements ApplicationListener{
+     /** If a player goes away of their server-side coordinates by this distance, they get teleported back. */
+     private static final float correctDist = tilesize * 14f;
+ 
++    private java.util.concurrent.ExecutorService worldDeflater;
++
+     public Administration admins = new Administration();
+     public CommandHandler clientCommands = new CommandHandler("/");
+     public TeamAssigner assigner = (player, players) -> {
+@@ -545,6 +547,27 @@ public class NetServer implements ApplicationListener{
+     }
+ 
+     public void sendWorldData(Player player){
++        //MDTX: deflating is ~70% of the time and froze the server for every join; only serialize on the main thread.
++        //packets sent meanwhile reach the client before the world, as they already overtake a stream being sent; a loading
++        //client queues them and replays them after loading. One thread keeps world streams in order, as sendStream does
++        if(headless){
++            var raw = new ByteArrayOutputStream();
++            NetworkIO.writeWorld(player, new BufferedOutputStream(raw, 1 << 15));
++            if(worldDeflater == null) worldDeflater = Threads.executor("World Data", 1);
++            worldDeflater.execute(() -> {
++                var stream = new ByteArrayOutputStream(raw.size());
++                try(OutputStream os = new FastDeflaterOutputStream(stream)){
++                    raw.writeTo(os);
++                }catch(IOException e){
++                    throw new UncheckedIOException(e);
++                }
++                //sent from this thread, as sendStreamAsync does
++                if(!player.con.isConnected()) return;
++                player.con.sendStream(new WorldStream(), stream);
++                debug("Packed @ of world data to @ (@ / @)", Strings.formatByteCount(stream.size()), player.name, player.con.address, player.uuid());
++            });
++            return;
++        }
+         var stream = new ByteArrayOutputStream();
+         OutputStream os = new FastDeflaterOutputStream(stream);
+         //MDTX: batch the tiny writes before the deflater, one native call each otherwise

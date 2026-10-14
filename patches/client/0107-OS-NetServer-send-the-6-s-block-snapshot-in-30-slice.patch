@@ -1,0 +1,97 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 18:14:46 +0300
+Subject: [PATCH] OS(NetServer): send the 6 s block snapshot in 30 slices
+ instead of one burst
+
+---
+ core/src/mindustry/core/NetServer.java | 55 +++++++++++++++++++++++++-
+ 1 file changed, 53 insertions(+), 2 deletions(-)
+
+diff --git a/core/src/mindustry/core/NetServer.java b/core/src/mindustry/core/NetServer.java
+index 089d66ad999f1d1a33c030154b5fa0dc5d51599e..3ab82548f58a86d5c366ac72f318a1dea2208206 100644
+--- a/core/src/mindustry/core/NetServer.java
++++ b/core/src/mindustry/core/NetServer.java
+@@ -54,6 +54,11 @@ public class NetServer implements ApplicationListener{
+ 
+     private java.util.concurrent.ExecutorService worldDeflater;
+ 
++    private static final int blockSyncSlices = 30;
++    private static final Timekeeper blockSliceTime = Timekeeper.ofSeconds(6f / blockSyncSlices);
++    private final Seq<Building> blockSyncQueue = new Seq<>();
++    private int blockSyncIndex, blockSyncSlice;
++
+     public Administration admins = new Administration();
+     public CommandHandler clientCommands = new CommandHandler("/");
+     public TeamAssigner assigner = (player, players) -> {
+@@ -138,6 +143,8 @@ public class NetServer implements ApplicationListener{
+     public long snapshotSyncTime;
+ 
+     public NetServer(){
++        //MDTX: buildings of the previous map still look valid on their own old tiles
++        Events.on(WorldLoadEvent.class, e -> blockSyncQueue.clear());
+ 
+         net.handleServer(Connect.class, (con, connect) -> {
+             Events.fire(new ConnectionEvent(con));
+@@ -1152,6 +1159,46 @@ public class NetServer implements ApplicationListener{
+         }
+     }
+ 
++    /** MDTX: on a server, the 6 s snapshot of every synced building goes out in 30 slices 0.2 s apart instead of one
++     * burst; each building is still sent once per 6 s. Buildings placed during a cycle wait for the next one. */
++    void writeBlockSnapshotSlice() throws IOException{
++        if(!blockSliceTime.poll()) return;
++
++        if(blockSyncIndex >= blockSyncQueue.size){
++            blockSyncQueue.clear();
++            blockSyncIndex = 0;
++            for(var team : state.teams.present){
++                blockSyncQueue.addAll(indexer.getFlagged(team.team, BlockFlag.synced));
++            }
++            blockSyncSlice = (blockSyncQueue.size + blockSyncSlices - 1) / blockSyncSlices;
++        }
++
++        syncStream.reset();
++        short sent = 0;
++        int end = Math.min(blockSyncIndex + blockSyncSlice, blockSyncQueue.size);
++        for(; blockSyncIndex < end; blockSyncIndex++){
++            var build = blockSyncQueue.get(blockSyncIndex);
++            if(!build.isValid()) continue;
++            sent++;
++
++            dataStream.writeInt(build.pos());
++            dataStream.writeShort(build.block.id);
++            build.writeSync(dataStreamWrites);
++
++            if(syncStream.size() > maxSnapshotSize){
++                dataStream.close();
++                Call.blockSnapshot(sent, syncStream.toByteArray());
++                sent = 0;
++                syncStream.reset();
++            }
++        }
++
++        if(sent > 0){
++            dataStream.close();
++            Call.blockSnapshot(sent, syncStream.toByteArray());
++        }
++    }
++
+     public void writeStateSnapshot() throws IOException{
+         byte tps = (byte)Math.min(Core.graphics.getFramesPerSecond(), 255);
+         syncStream.reset();
+@@ -1372,8 +1419,12 @@ public class NetServer implements ApplicationListener{
+             }
+ 
+ 
+-            if(Groups.player.size() > 0 && Core.settings.getBool("blocksync") && blockSyncTime.poll()){
+-                writeBlockSnapshots();
++            if(Groups.player.size() > 0 && Core.settings.getBool("blocksync")){
++                if(headless){
++                    writeBlockSnapshotSlice();
++                }else if(blockSyncTime.poll()){
++                    writeBlockSnapshots();
++                }
+             }
+ 
+             if(Groups.player.size() > 0 && buildHealthChanged.size > 0 && healthSyncTime.poll()){

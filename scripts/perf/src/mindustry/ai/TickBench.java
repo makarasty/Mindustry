@@ -240,6 +240,14 @@ public class TickBench implements ApplicationListener{
                 NetworkIO.writeWorld(joiner, headless ? new BufferedOutputStream(os, 1 << 15) : os);
                 System.out.printf("world data for a joining player: %.1f ms, %d KB%n", (Time.nanos() - t0) / 1e6, world.size() / 1024);
             }
+            //what stays on the main thread when world data and autosaves are deflated on another thread
+            for(int i = 0; i < 2; i++){
+                long t0 = Time.nanos();
+                NetworkIO.writeWorld(joiner, new BufferedOutputStream(new ByteArrayOutputStream(), 1 << 15));
+                long t1 = Time.nanos();
+                SaveIO.write(new BufferedOutputStream(new ByteArrayOutputStream(), 1 << 16), new SaveOptions());
+                System.out.printf("main thread only: world data %.1f ms, autosave %.1f ms%n", (t1 - t0) / 1e6, (Time.nanos() - t1) / 1e6);
+            }
             //uncompressed save stream, then the same bytes through each deflate level
             ByteArrayOutputStream raw = new ByteArrayOutputStream();
             SaveIO.write(raw, new SaveOptions());
