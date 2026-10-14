@@ -11,6 +11,9 @@ Nothing here is part of the Gradle build; it compiles against a built `server-re
   unit control loops plus world processors at setrate 1000), `spawn` (world processors spawning units, for the
   `maxTeamUnits` limit).
 - `jfrtop.py` prints self and inclusive time of the hottest methods, allocation sites, and `callers <frame>`.
+- `src/mindustry/ai/FakeNet.java`: a server with N connected players and no sockets (`-Dbench.players=N`), so
+  `NetServer.sync()` runs and is timed as `netSync`. Packets are serialized like ArcNetProvider does it.
+- `timing.sh`: interleaved timing of two jars in `run/`, medians over N rounds, see its header.
 - `ab.sh` runs a baseline jar and a patched jar on the same save: hash traces must be identical, then timing.
 - `mutate.sh` breaks an optimization and expects `ab.sh` to fail. Use it to check that the scenario
   actually exercises the code you changed.
@@ -47,8 +50,15 @@ another, for small machines).
 Timing runs on unit saves should use `BENCH_OPTS=-Dbench.seed=1`: without it physics and pathfinding are
 seeded differently in each JVM, and two jars end up timing different battles. The report prints `cpu`
 (main-thread CPU time, steadier than wall clock on a shared machine; physics threads are not in it), main-thread
-allocation, process-wide GC, and `unitTree.plain` (whether the unit quadtree fast path is on; `n/a` on jars
+allocation, process-wide GC, `proccpu` (CPU of the whole process per tick: physics executor, pathfinders, GC, JIT;
+what a shared VPS core pays) and `unitTree.plain` (whether the unit quadtree fast path is on; `n/a` on jars
 without it). `-Dbench.config=logicBudget=5000,maxTeamUnits=150` sets server configs for a run.
+`-Dbench.saves=N` times saving (cold and again, like the next autosave), loading, and building world data for a
+joining player instead of ticking.
+
+The machine these numbers come from is shared with other sessions: wall and CPU time move by 10% or more between
+runs. Compare medians over five or more interleaved rounds, look at the min too, and for one subsystem prefer the
+share of its samples in a JFR profile, which does not depend on the load of the machine.
 Exit codes: 0 ok, 1 usage/setup, 2 hash mismatch, 3 only the opt run crashed, 4 the base run crashed.
 
 Profile with `java -XX:StartFlightRecording=filename=x.jfr,settings=profile -cp ... TickBench <save> 2400 - 1200`,
@@ -107,3 +117,24 @@ Run with `mutate.sh <save> <ticks> <file> <old> <new>` on saves made by `Scenari
 | `core/src/mindustry/game/Teams.java` | `plain = result;` | `plain = false;` | control: must survive |
 
 `stack` needs its pending rebuild plans (generated since this matrix) for the builder and distance mutants.
+
+Component classes (`entities/comp/*Comp.java`) are templates: the code that runs is generated into
+`work/core/build/generated/source/kapt/main/mindustry/gen/`. Mutating a `*Comp.java` file compiles a class nothing
+uses and the mutant always survives; mutate the generated file instead (the generator rewrites `return` into
+`break <label>` and drops comments, so look the anchor up there).
+
+## Mutation matrix for patches 0088-0105
+
+| File | `<old>` | `<new>` | Killed on |
+|---|---|---|---|
+| `core/src/mindustry/logic/LExecutor.java` | `counter.numval = c + n;` (was `c + 1` before 0105) | `+ 1` more | stressA, 300 |
+| same | `(headless && type == DrawI.class)` | `(headless && (type == DrawI.class \|\| type == DrawFlushI.class))` | stressA, 300 |
+| `core/src/mindustry/world/blocks/distribution/ItemBridge.java` | `linkBuild = hadValidLink ? other.build : null;` | `if(linkBuild == null) linkBuild = hadValidLink ? other.build : null;` | stressA, chaos 3,5,8, 600 |
+| `core/src/mindustry/entities/Units.java` | `< dst*dst)) \|\| u.team` | `< range*range)) \|\| u.team` | war, 900 |
+| `core/build/generated/.../gen/Bullet.java` | `if (!type.collides) break bullet;` | `if (!type.collides \|\| type.collidesAir) break bullet;` | war, 600 |
+| `core/src/mindustry/async/PhysicsProcess.java` | `body.hitbox(tmp);` | `tmp.setCentered(body.x, body.y, body.radius, body.radius);` | war, 900 |
+
+Not killable by the hash, covered by JUnit instead: the nulloader pre-check (no save feeds unloaders, see
+`UnloaderSkipTests`), the first-match stop of the builder scan (`UnitTreeTests.nearbyCheckStopsAtTheSameFirstMatch`),
+the pathfinder refresh skip (`PathfinderRefreshTests`), saved processor code (`LogicCompressTests`). The weapon
+angle change cannot be killed at all: on a server the angle computed in `Weapon.update` only feeds effects.

@@ -57,6 +57,10 @@ import static mindustry.Vars.*;
  * bench.seed=1          timing mode with the same seeding and pathfinder stepping as hash mode, so both jars
  *                        simulate the same battle; pathfinding then runs outside the timed part of the tick
  * bench.config=a=1,b=2   set server configs (Administration.Config) after load, e.g. logicBudget=20000
+ * bench.saves=N          time N saves and N loads of the loaded save instead of ticking (median ms), then exit
+ * bench.players=N        N fake connected players (FakeNet); NetServer.update() runs every tick and is timed as
+ *                        netSync. Snapshot timers are driven by ticks (entities 12, health 30, blocks 360), not by
+ *                        the wall clock, so both jars send the same snapshots.
  */
 public class TickBench implements ApplicationListener{
     static final PerfCounter[] counters = {PerfCounter.entityMisc, PerfCounter.unitUpdate, PerfCounter.powerUpdate, PerfCounter.buildingUpdate, PerfCounter.bulletUpdate};
@@ -67,6 +71,9 @@ public class TickBench implements ApplicationListener{
 
     int tick = -1;
     boolean deterministic;
+    FakeNet fakeNet;
+    long[] netNs;
+    Field[] syncTimers;
     long[][] samples;
     long[] total, asyncWait, stateNs;
     PrintWriter hashWriter;
@@ -203,10 +210,72 @@ public class TickBench implements ApplicationListener{
             }
         }
 
+        int saves = Integer.getInteger("bench.saves", 0);
+        if(saves > 0){
+            Fi tmp = new Fi("benchdata/save_" + ProcessHandle.current().pid() + ".msav");
+            long[] w = new long[saves], w2 = new long[saves], r = new long[saves];
+            for(int i = 0; i < saves; i++){
+                long t0 = Time.nanos();
+                SaveIO.save(tmp);
+                w[i] = Time.nanos() - t0;
+                //second save of the same world, like the next autosave
+                t0 = Time.nanos();
+                SaveIO.save(tmp);
+                w2[i] = Time.nanos() - t0;
+                t0 = Time.nanos();
+                SaveIO.load(tmp);
+                r[i] = Time.nanos() - t0;
+            }
+            Arrays.sort(w);
+            Arrays.sort(w2);
+            Arrays.sort(r);
+            System.out.printf("saves: write %.1f ms, again %.1f ms, load %.1f ms (median of %d), %d KB%n", w[saves / 2] / 1e6, w2[saves / 2] / 1e6, r[saves / 2] / 1e6, saves, tmp.length() / 1024);
+            //world data as NetServer.sendWorldData builds it for a joining player, twice
+            Player joiner = Player.create();
+            joiner.team(state.rules.defaultTeam);
+            for(int i = 0; i < 2; i++){
+                long t0 = Time.nanos();
+                ByteArrayOutputStream world = new ByteArrayOutputStream();
+                OutputStream os = new FastDeflaterOutputStream(world);
+                NetworkIO.writeWorld(joiner, headless ? new BufferedOutputStream(os, 1 << 15) : os);
+                System.out.printf("world data for a joining player: %.1f ms, %d KB%n", (Time.nanos() - t0) / 1e6, world.size() / 1024);
+            }
+            //uncompressed save stream, then the same bytes through each deflate level
+            ByteArrayOutputStream raw = new ByteArrayOutputStream();
+            SaveIO.write(raw, new SaveOptions());
+            for(int level : new int[]{1, 2, 3, 6}){
+                long t0 = Time.nanos();
+                ByteArrayOutputStream z = new ByteArrayOutputStream();
+                Deflater def = new Deflater(level);
+                try(DeflaterOutputStream out = new DeflaterOutputStream(z, def, 1 << 16)){
+                    raw.writeTo(out);
+                }catch(IOException e){
+                    throw new RuntimeException(e);
+                }
+                def.end();
+                System.out.printf("deflate level %d: %.1f ms, %d KB of %d KB raw%n", level, (Time.nanos() - t0) / 1e6, z.size() / 1024, raw.size() / 1024);
+            }
+            tmp.delete();
+            System.exit(0);
+        }
+
+        int players = Integer.getInteger("bench.players", 0);
+        if(players > 0){
+            fakeNet = FakeNet.install(players, state.rules.defaultTeam);
+            Core.settings.put("blocksync", true);
+            try{
+                syncTimers = new Field[]{NetServer.class.getDeclaredField("blockSyncTime"), NetServer.class.getDeclaredField("healthSyncTime"), Timekeeper.class.getDeclaredField("lastTime")};
+                for(Field f : syncTimers) f.setAccessible(true);
+            }catch(Exception e){
+                throw new RuntimeException(e);
+            }
+        }
+
         Log.info("Loaded @: @x@, builds=@, units=@, graphs=@", savePath, world.width(), world.height(), Groups.build.size(), Groups.unit.size(), Groups.powerGraph.size());
 
         samples = new long[counters.length][ticks];
         total = new long[ticks];
+        netNs = new long[ticks];
         asyncWait = new long[ticks];
         stateNs = new long[ticks];
     }
@@ -241,9 +310,17 @@ public class TickBench implements ApplicationListener{
         long b = Time.nanos();
         asyncCore.end();
         long e = Time.nanos();
+        long ns = 0;
+        if(fakeNet != null){
+            driveSyncTimers();
+            long n0 = Time.nanos();
+            netServer.update();
+            ns = Time.nanos() - n0;
+        }
 
         if(t >= 0){
-            total[t] = e - s;
+            total[t] = e - s + ns;
+            netNs[t] = ns;
             asyncWait[t] = (e - b) + (a - s);
             stateNs[t] = (b - a) - PerfCounter.entityUpdate.latestValueNs();
             for(int i = 0; i < counters.length; i++){
@@ -263,6 +340,17 @@ public class TickBench implements ApplicationListener{
             if(traceOut != null) traceOut.close();
             if(typeOut != null) typeOut.close();
             System.exit(0);
+        }
+    }
+
+    void driveSyncTimers(){
+        try{
+            long now = Time.millis();
+            netServer.snapshotSyncTime = tick % 12 == 0 ? 0 : now;
+            syncTimers[2].setLong(syncTimers[0].get(null), tick % 360 == 0 ? 0 : now);
+            syncTimers[2].setLong(syncTimers[1].get(null), tick % 30 == 0 ? 0 : now);
+        }catch(Exception ex){
+            throw new RuntimeException(ex);
         }
     }
 
@@ -351,7 +439,8 @@ public class TickBench implements ApplicationListener{
     //endregion
     //region report
 
-    long allocStart, gcCountStart, gcMsStart, cpuStart;
+    long allocStart, gcCountStart, gcMsStart, cpuStart, procCpuStart;
+    final com.sun.management.OperatingSystemMXBean os = (com.sun.management.OperatingSystemMXBean)java.lang.management.ManagementFactory.getOperatingSystemMXBean();
     final com.sun.management.ThreadMXBean threads = (com.sun.management.ThreadMXBean)java.lang.management.ManagementFactory.getThreadMXBean();
 
     long gcCount(){
@@ -370,6 +459,7 @@ public class TickBench implements ApplicationListener{
     void startCounters(){
         allocStart = threads.getCurrentThreadAllocatedBytes();
         cpuStart = threads.getCurrentThreadCpuTime();
+        procCpuStart = os.getProcessCpuTime();
         gcCountStart = gcCount();
         gcMsStart = gcMs();
     }
@@ -425,9 +515,15 @@ public class TickBench implements ApplicationListener{
         row(sb, "TOTAL", total, totalMean);
         //main-thread CPU time is less sensitive to other load on the machine than the wall-clock phases
         sb.append(String.format("%-16s %9.3f ms/tick main thread (includes bench overhead)", "cpu", (threads.getCurrentThreadCpuTime() - cpuStart) / 1e6 / ticks)).append(nl);
+        //all threads: physics executor, pathfinders, GC, JIT; what a shared VPS core actually pays
+        sb.append(String.format("%-16s %9.3f ms/tick whole process", "proccpu", (os.getProcessCpuTime() - procCpuStart) / 1e6 / ticks)).append(nl);
         sb.append(String.format("%-16s %9.1f KB/tick main thread | gc %d collections, %d ms", "alloc", (threads.getCurrentThreadAllocatedBytes() - allocStart) / 1024.0 / ticks, gcCount() - gcCountStart, gcMs() - gcMsStart)).append(" (gc is process-wide)").append(nl);
         row(sb, "stateUpdate(etc)", stateNs, totalMean);
         row(sb, "asyncWait", asyncWait, totalMean);
+        if(fakeNet != null){
+            row(sb, "netSync", netNs, totalMean);
+            sb.append(String.format("%-16s %9.1f KB/tick sent to %d players", "net", fakeNet.bytes / 1024.0 / (tick + 1), Groups.player.size())).append(nl);
+        }
         for(int i = 0; i < counters.length; i++){
             row(sb, counters[i].name(), samples[i], totalMean);
         }
