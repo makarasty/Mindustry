@@ -1,0 +1,260 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 12:07:09 +0300
+Subject: [PATCH] OG(Teams): unit quadtrees read hitboxes from fields instead
+ of megamorphic calls
+
+---
+ core/src/mindustry/entities/EntityGroup.java |   9 +-
+ core/src/mindustry/entities/Units.java       |   5 +-
+ core/src/mindustry/game/Teams.java           |  52 ++++++++-
+ tests/src/test/java/UnitTreeTests.java       | 108 +++++++++++++++++++
+ 4 files changed, 170 insertions(+), 4 deletions(-)
+ create mode 100644 tests/src/test/java/UnitTreeTests.java
+
+diff --git a/core/src/mindustry/entities/EntityGroup.java b/core/src/mindustry/entities/EntityGroup.java
+index 1f71e11120a1667df8098e4e1336256080b6713a..f8cf6f2b7996fed3f1906ab8153de24fcee6e1a8 100644
+--- a/core/src/mindustry/entities/EntityGroup.java
++++ b/core/src/mindustry/entities/EntityGroup.java
+@@ -8,6 +8,7 @@ import arc.util.*;
+ import arc.util.Time.*;
+ import arc.util.pooling.*;
+ import mindustry.*;
++import mindustry.game.Teams.*;
+ import mindustry.gen.*;
+ import mindustryX.features.*;
+ 
+@@ -53,7 +54,7 @@ public class EntityGroup<T extends Entityc> implements Iterable<T>{
+         array = new Seq<>(false, 32, type);
+ 
+         if(spatial){
+-            tree = new QuadTree<>(new Rect(0, 0, 0, 0));
++            tree = newTree(new Rect(0, 0, 0, 0));
+         }
+ 
+         if(mapping){
+@@ -248,6 +249,10 @@ public class EntityGroup<T extends Entityc> implements Iterable<T>{
+         return tree;
+     }
+ 
++    private QuadTree newTree(Rect bounds){
++        return array.items instanceof Unit[] ? new UnitTree(bounds) : new QuadTree<>(bounds);
++    }
++
+     public Seq<T> rawSeq(){
+         return array;
+     }
+@@ -255,7 +260,7 @@ public class EntityGroup<T extends Entityc> implements Iterable<T>{
+     /** Resizes the internal quadtree, if it is enabled.*/
+     public void resize(float x, float y, float w, float h){
+         if(tree != null){
+-            tree = new QuadTree<>(new Rect(x, y, w, h));
++            tree = newTree(new Rect(x, y, w, h));
+         }
+     }
+ 
+diff --git a/core/src/mindustry/entities/Units.java b/core/src/mindustry/entities/Units.java
+index b6efc744fe0dbc03d0c879a3d8a6b0defc83cc25..2a861794582b9f4d57343ab429d2bb3c78b69cd8 100644
+--- a/core/src/mindustry/entities/Units.java
++++ b/core/src/mindustry/entities/Units.java
+@@ -2,6 +2,7 @@ package mindustry.entities;
+ 
+ import arc.*;
+ import arc.func.*;
++import arc.math.*;
+ import arc.math.geom.*;
+ import arc.struct.*;
+ import arc.util.*;
+@@ -459,7 +460,9 @@ public class Units{
+     /** Iterates over all units in a circle around this position. */
+     public static void nearby(@Nullable Team team, float x, float y, float radius, Cons<Unit> cons){
+         nearby(team, x - radius, y - radius, radius*2f, radius*2f, unit -> {
+-            if(unit.within(x, y, radius + unit.hitSize/2f)){
++            //same as unit.within(), without the megamorphic Position interface calls
++            float dst = radius + unit.hitSize/2f;
++            if(UnitTree.plain ? Mathf.dst2(unit.x, unit.y, x, y) < dst*dst : unit.within(x, y, dst)){
+                 cons.get(unit);
+             }
+         });
+diff --git a/core/src/mindustry/game/Teams.java b/core/src/mindustry/game/Teams.java
+index 636feb6b367b82a8e75cb10dbfef39c64916a066..b1e7f22ecd478e44cf185072f75f66de22098ae3 100644
+--- a/core/src/mindustry/game/Teams.java
++++ b/core/src/mindustry/game/Teams.java
+@@ -438,7 +438,7 @@ public class Teams{
+         }
+ 
+         public QuadTree<Unit> tree(){
+-            if(unitTree == null) unitTree = new QuadTree<>(Vars.world.getQuadBounds(new Rect()));
++            if(unitTree == null) unitTree = new UnitTree(Vars.world.getQuadBounds(new Rect()));
+             return unitTree;
+         }
+ 
+@@ -537,4 +537,54 @@ public class Teams{
+             '}';
+         }
+     }
++
++    /**
++     * Reads unit hitboxes straight from fields. Through QuadTreeObject every hitbox() is a megamorphic interface call,
++     * which was a quarter of the tick with a few thousand units. Falls back to hitbox() if a mod unit class overrides it.
++     */
++    public static class UnitTree extends QuadTree<Unit>{
++        /** True if every unit class uses the generated hitbox(), getX(), getY() and damaged(), so they can be read as fields. */
++        public static boolean plain;
++        private static boolean checked;
++
++        public UnitTree(Rect bounds){
++            super(bounds);
++            check();
++        }
++
++        private static void check(){
++            //trees are also made before content is loaded; check again with the next tree then
++            if(checked || Vars.content == null || Vars.content.units().isEmpty()) return;
++            boolean result = true;
++            for(UnitType type : Vars.content.units()){
++                if(type.sample == null) return;
++                try{
++                    Class<?> c = type.sample.getClass();
++                    result &= generated(c.getMethod("hitbox", Rect.class)) && generated(c.getMethod("getX")) && generated(c.getMethod("getY")) && generated(c.getMethod("damaged"))
++                        && generated(c.getMethod("within", float.class, float.class, float.class));
++                }catch(NoSuchMethodException e){
++                    result = false;
++                }
++            }
++            plain = result;
++            checked = true;
++        }
++
++        private static boolean generated(java.lang.reflect.Method m){
++            //interface default methods (Position.within) are not overridden
++            return m.getDeclaringClass().isInterface() || m.getDeclaringClass().getName().startsWith("mindustry.gen.");
++        }
++
++        @Override
++        protected QuadTree<Unit> newChild(Rect rect){
++            return new UnitTree(rect);
++        }
++
++        @Override
++        protected void hitbox(Unit unit){
++            //same as the generated UnitComp/HitboxComp code
++            if(plain) tmp.setCentered(unit.x, unit.y, unit.hitSize, unit.hitSize);
++            else unit.hitbox(tmp);
++        }
++    }
+ }
+diff --git a/tests/src/test/java/UnitTreeTests.java b/tests/src/test/java/UnitTreeTests.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..6b27a05eaea9f6388ce145bf85f122f176606e53
+--- /dev/null
++++ b/tests/src/test/java/UnitTreeTests.java
+@@ -0,0 +1,108 @@
++import arc.func.*;
++import arc.math.*;
++import arc.math.geom.*;
++import arc.struct.*;
++import mindustry.content.*;
++import mindustry.entities.*;
++import mindustry.game.*;
++import mindustry.game.Teams.*;
++import mindustry.gen.*;
++import mindustry.type.*;
++import org.junit.jupiter.api.*;
++
++import static mindustry.Vars.*;
++import static org.junit.jupiter.api.Assertions.*;
++
++/**
++ * Teams.UnitTree and Units.nearby read unit fields instead of calling hitbox(), getX(), damaged() and within().
++ * These tests fail when an upstream update changes the generated unit code those reads mirror.
++ */
++public class UnitTreeTests{
++
++    @BeforeAll
++    static void init(){
++        ApplicationTests.launchApplication();
++    }
++
++    @Test
++    void vanillaUnitsUseFastPath(){
++        new UnitTree(new Rect());
++        assertTrue(UnitTree.plain, "some unit class overrides hitbox/getX/getY/damaged/within, so the fast path is off");
++    }
++
++    @Test
++    void fieldsMatchGeneratedMethods(){
++        Rect a = new Rect(), b = new Rect();
++        Rand r = new Rand(1);
++        for(UnitType type : content.units()){
++            for(int i = 0; i < 20; i++){
++                Unit u = type.constructor.get();
++                u.set(r.range(1000f), r.range(1000f));
++                u.hitSize = r.random(1f, 60f);
++                u.maxHealth = 100f;
++                u.health = r.chance(0.5) ? 100f : r.random(100f);
++
++                u.hitbox(a);
++                b.setCentered(u.x, u.y, u.hitSize, u.hitSize);
++                assertTrue(a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height, type.name + " hitbox");
++                assertEquals(u.damaged(), u.health < u.maxHealth - 0.001f, type.name + " damaged");
++
++                float x = r.range(1000f), y = r.range(1000f), d = r.random(500f);
++                assertEquals(u.within(x, y, d), Mathf.dst2(u.x, u.y, x, y) < d * d, type.name + " within");
++            }
++        }
++    }
++
++    @Test
++    void sameResultsAsPlainTree(){
++        Rect bounds = new Rect(0, 0, 4000, 4000);
++        UnitTree fast = new UnitTree(bounds);
++        QuadTree<Unit> plain = new QuadTree<>(new Rect(bounds));
++        Seq<Unit> units = new Seq<>();
++        Rand r = new Rand(2);
++        for(int i = 0; i < 3000; i++){
++            Unit u = content.units().get(i % content.units().size).constructor.get();
++            //half of them in a pile, which is where the tree degenerates
++            if(i % 2 == 0) u.set(2000f + r.range(10f), 2000f + r.range(10f));
++            else u.set(r.random(4000f), r.random(4000f));
++            u.hitSize = r.random(4f, 40f);
++            units.add(u);
++        }
++        fast.fill(units);
++        plain.fill(units);
++
++        Seq<Unit> a = new Seq<>(), b = new Seq<>();
++        for(int i = 0; i < 500; i++){
++            float x = r.random(4000f), y = r.random(4000f), w = r.random(400f), h = r.random(400f);
++            a.clear();
++            b.clear();
++            fast.intersect(x, y, w, h, (Cons<Unit>)a::add);
++            plain.intersect(x, y, w, h, (Cons<Unit>)b::add);
++            assertEquals(b, a, "query " + i);
++        }
++    }
++
++    @Test
++    void nearbyMatchesWithin(){
++        world.loadMap(ApplicationTests.testMap);
++        state.rules.unitCap = 10000;
++        Rand r = new Rand(3);
++        Seq<UnitType> types = content.units().select(t -> !t.internal && t.useUnitCap);
++        float cx = world.unitWidth() / 2f, cy = world.unitHeight() / 2f;
++        for(int i = 0; i < 500; i++){
++            types.get(i % types.size).spawn(Team.sharded, cx + r.range(200f), cy + r.range(200f));
++        }
++        Groups.unit.update();
++        state.teams.updateTeamStats();
++
++        Seq<Unit> got = new Seq<>(), expected = new Seq<>();
++        for(int i = 0; i < 200; i++){
++            float x = cx + r.range(250f), y = cy + r.range(250f), radius = r.random(120f);
++            got.clear();
++            Units.nearby(Team.sharded, x, y, radius, got::add);
++            expected.selectFrom(Team.sharded.data().units, u -> u.within(x, y, radius + u.hitSize / 2f));
++            assertEquals(expected.size, got.size, "query " + i);
++            assertFalse(got.contains(u -> !expected.contains(u, true)), "query " + i);
++        }
++    }
++}

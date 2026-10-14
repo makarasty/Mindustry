@@ -1,0 +1,24 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 12:07:10 +0300
+Subject: [PATCH] OG(BuilderAI): check build plans before activelyBuilding when
+ looking for builders to assist
+
+---
+ core/src/mindustry/ai/types/BuilderAI.java | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/core/src/mindustry/ai/types/BuilderAI.java b/core/src/mindustry/ai/types/BuilderAI.java
+index 1c89b75ab855048083b34def51aeadb9a2d41c23..44ad519ec462ebb92546a6cfc186086b43db5d5d 100644
+--- a/core/src/mindustry/ai/types/BuilderAI.java
++++ b/core/src/mindustry/ai/types/BuilderAI.java
+@@ -152,7 +152,8 @@ public class BuilderAI extends AIController{
+                 Units.nearby(unit.team, unit.x, unit.y, buildRadius, u -> {
+                     if(found) return;
+ 
+-                    if(u.canBuild() && u != unit && u.activelyBuilding()){
++                    //plans first: a cheap field that activelyBuilding() requires anyway
++                    if(u != unit && u.plans.size != 0 && u.canBuild() && u.activelyBuilding()){
+                         BuildPlan plan = u.buildPlan();
+ 
+                         Building build = world.build(plan.x, plan.y);

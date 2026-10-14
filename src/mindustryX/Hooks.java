@@ -21,6 +21,7 @@ public class Hooks implements ApplicationListener{
         registerBundle();
         SettingsV2.INSTANCE.init();
         DebugUtil.init();//this is safe, and better at beforeInit,
+        if(Vars.headless) ServerLimits.init();
         BindingExt.init();
         Events.on(ClientLoadEvent.class, (e) -> MetricCollector.INSTANCE.onLaunch());
         //deprecated Java 8

@@ -1,0 +1,35 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 12:07:10 +0300
+Subject: [PATCH] OG(RepairFieldAbility): check damaged before distance in the
+ per-tick repair scan
+
+---
+ .../mindustry/entities/abilities/RepairFieldAbility.java   | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/core/src/mindustry/entities/abilities/RepairFieldAbility.java b/core/src/mindustry/entities/abilities/RepairFieldAbility.java
+index 9ff08d5f407c64b0abd5dc4d3658f0838b039cea..d7cb7ad8debe6d2d2b310c179d93ac09b287b691 100644
+--- a/core/src/mindustry/entities/abilities/RepairFieldAbility.java
++++ b/core/src/mindustry/entities/abilities/RepairFieldAbility.java
+@@ -8,6 +8,7 @@ import arc.struct.*;
+ import arc.util.*;
+ import mindustry.content.*;
+ import mindustry.entities.*;
++import mindustry.game.Teams.*;
+ import mindustry.gen.*;
+ import java.util.*;
+ 
+@@ -97,7 +98,11 @@ public class RepairFieldAbility extends Ability{
+             boolean limitTargets = maxTargets >= 0;
+             float healPercentMult = healPercent / 100f;
+ 
+-            Units.nearby(unit.team, unit.x, unit.y, range, other -> {
++            float x = unit.x, y = unit.y;
++            //Units.nearby(team, x, y, range) with damaged() first: when nobody is hurt this scan runs every tick for every healer
++            Units.nearby(unit.team, x - range, y - range, range * 2f, range * 2f, other -> {
++                if(!(UnitTree.plain ? other.health < other.maxHealth - 0.001f : other.damaged()) || !other.within(x, y, range + other.hitSize/2f)) return;
++
+                 //check for 2 more targets just in case
+                 if(limitTargets && targets.size >= maxTargets + 2) return;
+ 

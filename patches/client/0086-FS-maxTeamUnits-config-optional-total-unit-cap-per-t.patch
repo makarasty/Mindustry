@@ -1,0 +1,88 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 12:07:10 +0300
+Subject: [PATCH] FS: maxTeamUnits config, optional total unit cap per team
+
+---
+ core/src/mindustry/entities/Units.java     |  5 ++-
+ tests/src/test/java/ServerLimitsTests.java | 48 ++++++++++++++++++++++
+ 2 files changed, 52 insertions(+), 1 deletion(-)
+ create mode 100644 tests/src/test/java/ServerLimitsTests.java
+
+diff --git a/core/src/mindustry/entities/Units.java b/core/src/mindustry/entities/Units.java
+index 2a861794582b9f4d57343ab429d2bb3c78b69cd8..753b921c305f65c6bc5310335810ba6b6fbe33c7 100644
+--- a/core/src/mindustry/entities/Units.java
++++ b/core/src/mindustry/entities/Units.java
+@@ -13,6 +13,7 @@ import mindustry.game.Teams.*;
+ import mindustry.gen.*;
+ import mindustry.type.*;
+ import mindustry.world.*;
++import mindustryX.features.*;
+ 
+ import static mindustry.Vars.*;
+ 
+@@ -114,7 +115,9 @@ public class Units{
+ 
+     /** @return whether a new instance of a unit of this team can be created. */
+     public static boolean canCreate(Team team, UnitType type){
+-        return !type.useUnitCap || (team.data().countType(type) < getCap(team) && !type.isBanned());
++        int cap = getCap(team);
++        //MDTX: optional total cap per team on servers, uncapped teams (waves) stay uncapped
++        return !type.useUnitCap || (team.data().countType(type) < cap && !type.isBanned() && (cap == Integer.MAX_VALUE || ServerLimits.unitsAllowed(team)));
+     }
+ 
+     public static int getCap(Team team){
+diff --git a/tests/src/test/java/ServerLimitsTests.java b/tests/src/test/java/ServerLimitsTests.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..d6e2c84f76f02aa2e03720f0f227a9d18c8c7aff
+--- /dev/null
++++ b/tests/src/test/java/ServerLimitsTests.java
+@@ -0,0 +1,48 @@
++import mindustry.content.*;
++import mindustry.entities.*;
++import mindustry.game.*;
++import mindustry.gen.*;
++import mindustry.type.*;
++import mindustryX.features.*;
++import org.junit.jupiter.api.*;
++
++import static mindustry.Vars.*;
++import static org.junit.jupiter.api.Assertions.*;
++
++/** The maxTeamUnits server config: off changes nothing, on limits what it says. */
++public class ServerLimitsTests{
++
++    @BeforeAll
++    static void init(){
++        ApplicationTests.launchApplication();
++    }
++
++    @AfterEach
++    void reset(){
++        ServerLimits.maxTeamUnits.set(0);
++    }
++
++    @Test
++    void teamUnitCap(){
++        world.loadMap(ApplicationTests.testMap);
++        state.rules.unitCap = 1000;
++        for(int i = 0; i < 5; i++) UnitTypes.dagger.spawn(Team.sharded, 100f, 100f);
++        assertTrue(Units.canCreate(Team.sharded, UnitTypes.flare), "off by default");
++
++        ServerLimits.maxTeamUnits.set(5);
++        assertFalse(Units.canCreate(Team.sharded, UnitTypes.flare), "the cap is per team, not per type");
++
++        //missiles do not count, and units leave the count as soon as they are removed, not on the next tick
++        UnitType missile = content.units().find(t -> !t.useUnitCap && !t.internal);
++        missile.spawn(Team.sharded, 100f, 100f);
++        Groups.unit.find(u -> u.type == UnitTypes.dagger).remove();
++        assertTrue(Units.canCreate(Team.sharded, UnitTypes.flare));
++        UnitTypes.flare.spawn(Team.sharded, 100f, 100f);
++        assertFalse(Units.canCreate(Team.sharded, UnitTypes.flare), "a spawn counts at once");
++
++        //waves outside PvP have no cap
++        state.rules.pvp = false;
++        for(int i = 0; i < 6; i++) UnitTypes.dagger.spawn(state.rules.waveTeam, 100f, 100f);
++        assertTrue(Units.canCreate(state.rules.waveTeam, UnitTypes.dagger));
++    }
++}

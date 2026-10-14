@@ -1,0 +1,203 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 12:07:10 +0300
+Subject: [PATCH] FS: logicBudget config, optional instruction budget shared by
+ player processors
+
+---
+ .../world/blocks/logic/LogicBlock.java        |  11 +-
+ tests/src/test/java/ServerLimitsTests.java    | 154 ++++++++++++------
+ 2 files changed, 116 insertions(+), 49 deletions(-)
+
+diff --git a/core/src/mindustry/world/blocks/logic/LogicBlock.java b/core/src/mindustry/world/blocks/logic/LogicBlock.java
+index 7381dc365f4f7b9ef3b426d3912d40a2a90cec5c..cc7d568885bbe18da59e2e78d485ad0e8d9502e2 100644
+--- a/core/src/mindustry/world/blocks/logic/LogicBlock.java
++++ b/core/src/mindustry/world/blocks/logic/LogicBlock.java
+@@ -587,10 +587,12 @@ public class LogicBlock extends Block{
+                 if(accumulator > maxInstructionScale * ipt) accumulator = maxInstructionScale * ipt;
+ 
+                 running = true;
++                boolean waited = false;
+                 while(accumulator >= 1f){
+                     executor.runOnce();
+                     if(executor.yield){
+                         executor.yield = false;
++                        waited = true;
+                         break;
+                     }
+                     accumulator --;
+@@ -599,7 +601,14 @@ public class LogicBlock extends Block{
+ 
+                 // Do not move in front of the loop, otherwise the curTime accumulated in WaitI
+                 // may get out of sync with the accumulator increase.
+-                accumulator += edelta() * ipt;
++                float add = edelta() * ipt;
++                //MDTX: optional instruction budget shared by player processors on servers, see ServerLimits
++                if(!privileged && ServerLimits.logicIpt > 0){
++                    //processors in wait or stop do not compete for the budget
++                    if(!waited) ServerLimits.logicDemand += add;
++                    add *= ServerLimits.logicScale;
++                }
++                accumulator += add;
+             }
+         }
+ 
+diff --git a/tests/src/test/java/ServerLimitsTests.java b/tests/src/test/java/ServerLimitsTests.java
+index d6e2c84f76f02aa2e03720f0f227a9d18c8c7aff..77b35f0aeb9c2fb6cc7a6e151946f1a806eac7a7 100644
+--- a/tests/src/test/java/ServerLimitsTests.java
++++ b/tests/src/test/java/ServerLimitsTests.java
+@@ -1,48 +1,106 @@
+-import mindustry.content.*;
+-import mindustry.entities.*;
+-import mindustry.game.*;
+-import mindustry.gen.*;
+-import mindustry.type.*;
+-import mindustryX.features.*;
+-import org.junit.jupiter.api.*;
+-
+-import static mindustry.Vars.*;
+-import static org.junit.jupiter.api.Assertions.*;
+-
+-/** The maxTeamUnits server config: off changes nothing, on limits what it says. */
+-public class ServerLimitsTests{
+-
+-    @BeforeAll
+-    static void init(){
+-        ApplicationTests.launchApplication();
+-    }
+-
+-    @AfterEach
+-    void reset(){
+-        ServerLimits.maxTeamUnits.set(0);
+-    }
+-
+-    @Test
+-    void teamUnitCap(){
+-        world.loadMap(ApplicationTests.testMap);
+-        state.rules.unitCap = 1000;
+-        for(int i = 0; i < 5; i++) UnitTypes.dagger.spawn(Team.sharded, 100f, 100f);
+-        assertTrue(Units.canCreate(Team.sharded, UnitTypes.flare), "off by default");
+-
+-        ServerLimits.maxTeamUnits.set(5);
+-        assertFalse(Units.canCreate(Team.sharded, UnitTypes.flare), "the cap is per team, not per type");
+-
+-        //missiles do not count, and units leave the count as soon as they are removed, not on the next tick
+-        UnitType missile = content.units().find(t -> !t.useUnitCap && !t.internal);
+-        missile.spawn(Team.sharded, 100f, 100f);
+-        Groups.unit.find(u -> u.type == UnitTypes.dagger).remove();
+-        assertTrue(Units.canCreate(Team.sharded, UnitTypes.flare));
+-        UnitTypes.flare.spawn(Team.sharded, 100f, 100f);
+-        assertFalse(Units.canCreate(Team.sharded, UnitTypes.flare), "a spawn counts at once");
+-
+-        //waves outside PvP have no cap
+-        state.rules.pvp = false;
+-        for(int i = 0; i < 6; i++) UnitTypes.dagger.spawn(state.rules.waveTeam, 100f, 100f);
+-        assertTrue(Units.canCreate(state.rules.waveTeam, UnitTypes.dagger));
+-    }
+-}
++import arc.*;
++import arc.util.*;
++import mindustry.content.*;
++import mindustry.entities.*;
++import mindustry.game.*;
++import mindustry.game.EventType.*;
++import mindustry.gen.*;
++import mindustry.type.*;
++import mindustry.world.*;
++import mindustry.world.blocks.logic.LogicBlock.*;
++import mindustryX.features.*;
++import org.junit.jupiter.api.*;
++
++import static mindustry.Vars.*;
++import static org.junit.jupiter.api.Assertions.*;
++
++/** The maxTeamUnits and logicBudget server configs: off changes nothing, on limits what it says. */
++public class ServerLimitsTests{
++
++    @BeforeAll
++    static void init(){
++        ApplicationTests.launchApplication();
++    }
++
++    @AfterEach
++    void reset(){
++        ServerLimits.maxTeamUnits.set(0);
++        ServerLimits.logicBudget.set(0);
++    }
++
++    @Test
++    void teamUnitCap(){
++        world.loadMap(ApplicationTests.testMap);
++        state.rules.unitCap = 1000;
++        for(int i = 0; i < 5; i++) UnitTypes.dagger.spawn(Team.sharded, 100f, 100f);
++        assertTrue(Units.canCreate(Team.sharded, UnitTypes.flare), "off by default");
++
++        ServerLimits.maxTeamUnits.set(5);
++        assertFalse(Units.canCreate(Team.sharded, UnitTypes.flare), "the cap is per team, not per type");
++
++        //missiles do not count, and units leave the count as soon as they are removed, not on the next tick
++        UnitType missile = content.units().find(t -> !t.useUnitCap && !t.internal);
++        missile.spawn(Team.sharded, 100f, 100f);
++        Groups.unit.find(u -> u.type == UnitTypes.dagger).remove();
++        assertTrue(Units.canCreate(Team.sharded, UnitTypes.flare));
++        UnitTypes.flare.spawn(Team.sharded, 100f, 100f);
++        assertFalse(Units.canCreate(Team.sharded, UnitTypes.flare), "a spawn counts at once");
++
++        //waves outside PvP have no cap
++        state.rules.pvp = false;
++        for(int i = 0; i < 6; i++) UnitTypes.dagger.spawn(state.rules.waveTeam, 100f, 100f);
++        assertTrue(Units.canCreate(state.rules.waveTeam, UnitTypes.dagger));
++    }
++
++    @Test
++    void logicBudgetScale(){
++        Events.fire(Trigger.beforeGameUpdate);
++        assertEquals(1f, ServerLimits.logicScale);
++
++        ServerLimits.logicBudget.set(1000);
++        ServerLimits.logicDemand = 4000;
++        Events.fire(Trigger.beforeGameUpdate);
++        assertEquals(0.25f, ServerLimits.logicScale, 1e-6f);
++
++        ServerLimits.logicDemand = 800;
++        Events.fire(Trigger.beforeGameUpdate);
++        assertEquals(1f, ServerLimits.logicScale, "under budget");
++
++        ServerLimits.logicDemand = 0;
++        Events.fire(Trigger.beforeGameUpdate);
++        assertEquals(1f, ServerLimits.logicScale);
++    }
++
++    @Test
++    void logicBudgetSlowsProcessors(){
++        assertEquals(400, countAfter(200, 0, "op add n n 1"), 2, "micro processors run 2 instructions per tick when off");
++        //two processors want 4 per tick, the budget gives them 2 together
++        assertEquals(200, countAfter(200, 2, "op add n n 1"), 4);
++        //a waiting processor does not take budget from the busy one
++        assertEquals(400, countAfter(200, 2, "op add n n 1", "wait 1"), 4);
++    }
++
++    /** Runs two micro processors for the given ticks, the first one on the first code, returns its counter n. */
++    double countAfter(int ticks, int budget, String... code){
++        state.rules = new Rules();
++        Tiles tiles = world.resize(8, 8);
++        world.beginMapLoad();
++        tiles.fill();
++        world.endMapLoad();
++        state.rules.teams.get(Team.sharded).cheat = true;
++        ServerLimits.logicBudget.set(budget);
++        LogicBuild[] procs = new LogicBuild[2];
++        for(int i = 0; i < 2; i++){
++            world.tile(2 + i * 2, 2).setBlock(Blocks.microProcessor, Team.sharded);
++            procs[i] = (LogicBuild)world.tile(2 + i * 2, 2).build;
++            procs[i].updateCode(code[Math.min(i, code.length - 1)]);
++        }
++        Time.setDeltaProvider(() -> 1f);
++        for(int t = 0; t < ticks; t++){
++            Time.update();
++            Events.fire(Trigger.beforeGameUpdate);
++            for(LogicBuild p : procs) p.update();
++        }
++        return procs[0].executor.optionalVar("n").num();
++    }
++}
