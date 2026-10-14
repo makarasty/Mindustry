@@ -111,7 +111,7 @@ public class Hooks implements ApplicationListener{
 
     private void updateTitle(){
         if(Core.graphics == null) return;
-        var mod = Vars.mods.orderedMods();
+        var mod = Vars.mods.getMods();
         var title = VarsX.bundle.windowTitle(VarsX.version, mod.count(Mods.LoadedMod::enabled), mod.size, Core.graphics.getWidth(), Core.graphics.getHeight());
         if(!title.equals(lastTitle)){
             lastTitle = title;

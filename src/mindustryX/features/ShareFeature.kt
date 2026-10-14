@@ -12,6 +12,7 @@ import arc.util.Strings
 import mindustry.Vars
 import mindustry.content.Items
 import mindustry.content.StatusEffects
+import mindustry.core.UI
 import mindustry.ctype.UnlockableContent
 import mindustry.entities.Units
 import mindustry.game.Schematic
@@ -148,6 +149,85 @@ object ShareFeature {
         send(Iconc.waves, msg)
     }
 
+    /** 把左上角当前显示的目标/状态发到聊天栏 */
+    @JvmStatic
+    fun shareObjective() {
+        val text = objectiveText()
+        if (text.isNotEmpty()) send(Iconc.fileText, text)
+    }
+
+    /** 复刻左上角状态面板的文本，逻辑见 HudFragment.makeStatusTable；换行换成 " | " 便于聊天显示 */
+    private fun objectiveText(): String {
+        val state = Vars.state
+
+        //mission 覆盖一切
+        val mission = state.rules.mission
+        if (!mission.isNullOrEmpty()) return mission
+
+        val builder = StringBuilder()
+
+        //其次是进行中的 objectives
+        for (obj in state.rules.objectives) {
+            if (!obj.qualified() || obj.hidden) continue
+            val text = obj.text() ?: continue
+            if (text.isEmpty()) continue
+            if (builder.isNotEmpty()) builder.append(" | ")
+            builder.append(UI.formatIcons(text))
+        }
+        if (builder.isNotEmpty()) return builder.toString()
+
+        val player = Vars.player
+        if (!player.team().activateUnitFactories()) {
+            val delay = Math.max(state.rules.unitActivationDelay(player.team()) - state.tick, 0.0)
+            builder.append("[lightgray]").append(Core.bundle.format("rules.unitfactoryactivation.objective", "[accent]" + UI.formatTime(delay.toFloat()))).append("[white]")
+        }
+
+        if (!state.rules.waves && state.rules.attackMode) {
+            var cores = 0
+            for (data in state.teams.present) {
+                if (data.team != player.team()) cores += data.cores.size
+            }
+            cores = Math.max(cores, 1)
+            builder.append(Core.bundle.format(if (cores > 1) "wave.enemycores" else "wave.enemycore", cores))
+            return builder.toString()
+        }
+
+        //游戏结束后不再显示状态
+        if (state.afterGameOver && state.isCampaign()) return builder.toString()
+
+        if (!state.rules.waves) {
+            if (state.isCampaign()) builder.append("[lightgray]").append(Core.bundle.get("sector.curcapture"))
+            return builder.toString()
+        }
+
+        if (builder.isNotEmpty()) builder.append(" | ")
+        if (state.rules.winWave > 1 && state.rules.winWave >= state.wave) {
+            builder.append(Core.bundle.format("wave.cap", state.wave, state.rules.winWave))
+        } else {
+            builder.append(Core.bundle.format("wave", state.wave))
+        }
+
+        if (state.enemies > 0) {
+            builder.append(" | ").append(Core.bundle.format(if (state.enemies == 1) "wave.enemy" else "wave.enemies", state.enemies))
+        }
+
+        if (state.rules.waveTimer) {
+            builder.append(" | ").append(if (Vars.logic.isWaitingWave()) Core.bundle.get("wave.waveInProgress") else Core.bundle.format("wave.waiting", waveTime((state.wavetime / 60).toInt())))
+        } else if (state.enemies == 0) {
+            builder.append(" | ").append(Core.bundle.get("waiting"))
+        }
+
+        return builder.toString()
+    }
+
+    /** wave.waiting 的时间串，见 HudFragment 里的 waitingf */
+    private fun waveTime(seconds: Int): String {
+        val m = seconds / 60
+        val s = seconds % 60
+        val sec = if (s < 10) "0$s" else s.toString()
+        return if (m > 0) "$m:$sec" else "$s"
+    }
+
     data class PowerInfo(val balance: Float, val stored: Float, val capacity: Float, val produced: Float, val need: Float, val satisfaction: Float)
     data class TeamItemInfo(val amount: Int, val delta: Int)
 
@@ -232,6 +312,7 @@ object ShareFeature {
         add("♐>").padRight(18f)
         button(Icon.mapSmall, Styles.clearNonei, Vars.iconMed) { MarkerType.toggleMarkHitterUI() }.tooltip(i("标记地图位置"))
         button(Icon.wavesSmall, Styles.clearNonei, Vars.iconMed) { shareWaveInfo(Vars.state.wave) }.tooltip(i("分享波次信息"))
+        button(Icon.fileTextSmall, Styles.clearNonei, Vars.iconMed) { shareObjective() }.tooltip(i("标记当前任务"))
         button(Icon.powerSmall, Styles.clearNonei, Vars.iconMed) { shareTeamPower() }.tooltip(i("分享电力情况"))
         button(TextureRegionDrawable(Items.copper.uiIcon), Styles.clearNonei, Vars.iconSmall) { openShareItemDialog() }.tooltip(i("分享库存情况"))
         button(Icon.unitsSmall, Styles.clearNonei, Vars.iconMed) { openShareUnitDialog() }.tooltip(i("分享单位数量"))

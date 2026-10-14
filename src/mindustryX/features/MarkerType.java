@@ -22,8 +22,6 @@ import mindustry.ui.*;
 import mindustryX.features.func.*;
 import mindustryX.features.ui.*;
 
-import java.util.regex.*;
-
 import static arc.graphics.g2d.Draw.color;
 import static arc.graphics.g2d.Lines.stroke;
 import static mindustry.Vars.*;
@@ -34,7 +32,7 @@ public class MarkerType{
     public static final float heatTime = 60f;
     /** 滞留时间 */
     public static final float retainTime = 1800f;
-    public static MarkerType mark, gatherMark, attackMark, defenseMark, quesMark;
+    public static MarkerType mark, gatherMark, attackMark, defenseMark, quesMark, customMark;
     public static Seq<MarkerType> allTypes;
     private static MarkElement last;
     private static final Vec2 panCenter = new Vec2();
@@ -110,7 +108,8 @@ public class MarkerType{
             Lines.circle(e.x, e.y, 3f);
             Lines.circle(e.x, e.y + 18.5f, 27f);
         }), Color.pink);
-        allTypes = Seq.with(mark, gatherMark, attackMark, defenseMark, quesMark);
+        customMark = new MarkerType("Custom", mark.effect, Pal.accent);
+        allTypes = Seq.with(mark, gatherMark, attackMark, defenseMark, quesMark, customMark);
     }
 
     static{
@@ -212,12 +211,23 @@ public class MarkerType{
     }
 
     public void markWithMessage(Vec2 pos){
+        String coords = FormatDefault.formatTile(pos);
+        if(this == customMark){
+            String hint = Core.bundle.get("marker.Custom.hint", "");
+            ui.showTextInput(customMark.localizedName, hint, maxTextLength, coords, false, false, text -> markWithMessage(pos, text.trim()), () -> {
+            });
+            return;
+        }
+        String msg = Strings.format("[#@]<@>[]@", color, name, coords);
+        markWithMessage(pos, msg);
+    }
+
+    public void markWithMessage(Vec2 pos, String msg){
         if(last != null && last.time < heatTime){
             Vars.ui.announce(i("请不要频繁标记!"));
             return;
         }
         last = at(pos);
-        String msg = Strings.format("[#@]<@>[]@", color, name, FormatDefault.formatTile(pos));
         ShareFeature.send(Iconc.map, msg);
         Call.pingLocation(player, pos.x, pos.y, msg);
     }
@@ -234,8 +244,9 @@ public class MarkerType{
             }
         }
 
-        var exists = (MarkElement)Groups.draw.find(it -> it instanceof MarkElement e && e.message == null && e.within(pos.scl(tilesize), 2 * tilesize));
-        last = exists != null ? exists : type.at(pos.scl(tilesize));
+        pos.scl(tilesize);
+        var exists = (MarkElement)Groups.draw.find(it -> it instanceof MarkElement e && e.message == null && e.within(pos, 2 * tilesize));
+        last = exists != null ? exists : type.at(pos);
         last.message = text;
     }
 

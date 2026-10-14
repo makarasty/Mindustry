@@ -9,9 +9,9 @@ Content-Transfer-Encoding: 8bit
 
 ---
  core/src/mindustry/entities/Units.java        | 25 ++++-
- .../mindustry/entities/bullet/BulletType.java | 12 ++-
+ .../mindustry/entities/bullet/BulletType.java | 14 ++-
  .../src/mindustry/graphics/LightRenderer.java | 94 ++++++++++++++++---
- 3 files changed, 108 insertions(+), 23 deletions(-)
+ 3 files changed, 110 insertions(+), 23 deletions(-)
 
 diff --git a/core/src/mindustry/entities/Units.java b/core/src/mindustry/entities/Units.java
 index 2ccd5bf36b35365a1987b9eb726245ec3fd80ee5..b6efc744fe0dbc03d0c879a3d8a6b0defc83cc25 100644
@@ -68,7 +68,7 @@ index 2ccd5bf36b35365a1987b9eb726245ec3fd80ee5..b6efc744fe0dbc03d0c879a3d8a6b0de
                  result = e;
                  cdist = cost;
 diff --git a/core/src/mindustry/entities/bullet/BulletType.java b/core/src/mindustry/entities/bullet/BulletType.java
-index 7086570513d648924b6087f9ac7655a98a13c4da..fffdbcb76562943f4b48bd50ab8440c11fccdf9b 100644
+index eb5f8fa5c8e921bb7f381d2e71150fd058464abc..03f8a8d4ba5d03a82514de5af633118bd2aaf5dd 100644
 --- a/core/src/mindustry/entities/bullet/BulletType.java
 +++ b/core/src/mindustry/entities/bullet/BulletType.java
 @@ -744,6 +744,7 @@ public class BulletType extends Content implements Cloneable{
@@ -79,33 +79,29 @@ index 7086570513d648924b6087f9ac7655a98a13c4da..fffdbcb76562943f4b48bd50ab8440c1
      public void updateHoming(Bullet b){
          if(homingPower > 0.0001f && b.time >= homingDelay){
              float realAimX = b.aimX < 0 ? b.x : b.aimX;
-@@ -751,19 +752,22 @@ public class BulletType extends Content implements Cloneable{
- 
-             Teamc target;
-             //home in on allies if possible
-+            argBullet = b;
-             if(heals()){
+@@ -756,13 +757,18 @@ public class BulletType extends Content implements Cloneable{
+                 target = b.aimTile.build;
+             }else if(heals()){
+                 //home in on allies if possible
++                argBullet = b;
                  target = Units.closestTarget(null, realAimX, realAimY, homingRange, b.team,
 -                    e -> e.checkTarget(collidesAir, collidesGround) && e.team != b.team && !b.hasCollided(e.id),
 -                    t -> collidesGround && (t.team != b.team || t.damaged()) && !b.hasCollided(t.id));
 +                e -> e.checkTarget(collidesAir, collidesGround) && e.team != argBullet.team && !argBullet.hasCollided(e.id),
 +                t -> collidesGround && (t.team != argBullet.team || t.damaged()) && !argBullet.hasCollided(t.id)
 +                );
++                argBullet = null;
              }else{
-                 if(b.aimTile != null && b.aimTile.build != null && b.aimTile.build.team != b.team && collidesGround && !b.hasCollided(b.aimTile.build.id)){
-                     target = b.aimTile.build;
-                 }else{
-                     target = Units.closestTarget(b.team, realAimX, realAimY, homingRange,
--                        e -> e != null && e.checkTarget(collidesAir, collidesGround) && !b.hasCollided(e.id),
--                        t -> t != null && collidesGround && !b.hasCollided(t.id));
++                argBullet = b;
+                 target = Units.closestTarget(b.team, realAimX, realAimY, homingRange,
+-                    e -> e != null && e.checkTarget(collidesAir, collidesGround) && !b.hasCollided(e.id),
+-                    t -> t != null && collidesGround && !b.hasCollided(t.id));
 +                    e -> e != null && e.checkTarget(collidesAir, collidesGround) && !argBullet.hasCollided(e.id),
 +                    t -> t != null && collidesGround && !argBullet.hasCollided(t.id));
-                 }
++                argBullet = null;
              }
-+            argBullet = null;
  
              if(target != null){
-                 b.vel.setAngle(Angles.moveToward(b.rotation(), b.angleTo(target), homingPower * Time.delta * 50f));
 diff --git a/core/src/mindustry/graphics/LightRenderer.java b/core/src/mindustry/graphics/LightRenderer.java
 index c20e841ab3869ca8d6240bf844cc87ef12eee47f..c4e410344800217c3adf2e2a0ea7635b6ffc4fc5 100644
 --- a/core/src/mindustry/graphics/LightRenderer.java

@@ -5,9 +5,9 @@ Subject: [PATCH] FS: logicBudget config, optional instruction budget shared by
  player processors
 
 ---
- .../world/blocks/logic/LogicBlock.java        |  11 +-
- tests/src/test/java/ServerLimitsTests.java    | 154 ++++++++++++------
- 2 files changed, 116 insertions(+), 49 deletions(-)
+ .../world/blocks/logic/LogicBlock.java        | 11 +++-
+ tests/src/test/java/ServerLimitsTests.java    | 60 ++++++++++++++++++-
+ 2 files changed, 69 insertions(+), 2 deletions(-)
 
 diff --git a/core/src/mindustry/world/blocks/logic/LogicBlock.java b/core/src/mindustry/world/blocks/logic/LogicBlock.java
 index 7381dc365f4f7b9ef3b426d3912d40a2a90cec5c..cc7d568885bbe18da59e2e78d485ad0e8d9502e2 100644
@@ -43,111 +43,43 @@ index 7381dc365f4f7b9ef3b426d3912d40a2a90cec5c..cc7d568885bbe18da59e2e78d485ad0e
          }
  
 diff --git a/tests/src/test/java/ServerLimitsTests.java b/tests/src/test/java/ServerLimitsTests.java
-index d6e2c84f76f02aa2e03720f0f227a9d18c8c7aff..77b35f0aeb9c2fb6cc7a6e151946f1a806eac7a7 100644
+index d6e2c84f76f02aa2e03720f0f227a9d18c8c7aff..0c5a1a4c8a3d8a3c28da01190fabaa8828bda7d1 100644
 --- a/tests/src/test/java/ServerLimitsTests.java
 +++ b/tests/src/test/java/ServerLimitsTests.java
-@@ -1,48 +1,106 @@
--import mindustry.content.*;
--import mindustry.entities.*;
--import mindustry.game.*;
--import mindustry.gen.*;
--import mindustry.type.*;
--import mindustryX.features.*;
--import org.junit.jupiter.api.*;
--
--import static mindustry.Vars.*;
--import static org.junit.jupiter.api.Assertions.*;
--
--/** The maxTeamUnits server config: off changes nothing, on limits what it says. */
--public class ServerLimitsTests{
--
--    @BeforeAll
--    static void init(){
--        ApplicationTests.launchApplication();
--    }
--
--    @AfterEach
--    void reset(){
--        ServerLimits.maxTeamUnits.set(0);
--    }
--
--    @Test
--    void teamUnitCap(){
--        world.loadMap(ApplicationTests.testMap);
--        state.rules.unitCap = 1000;
--        for(int i = 0; i < 5; i++) UnitTypes.dagger.spawn(Team.sharded, 100f, 100f);
--        assertTrue(Units.canCreate(Team.sharded, UnitTypes.flare), "off by default");
--
--        ServerLimits.maxTeamUnits.set(5);
--        assertFalse(Units.canCreate(Team.sharded, UnitTypes.flare), "the cap is per team, not per type");
--
--        //missiles do not count, and units leave the count as soon as they are removed, not on the next tick
--        UnitType missile = content.units().find(t -> !t.useUnitCap && !t.internal);
--        missile.spawn(Team.sharded, 100f, 100f);
--        Groups.unit.find(u -> u.type == UnitTypes.dagger).remove();
--        assertTrue(Units.canCreate(Team.sharded, UnitTypes.flare));
--        UnitTypes.flare.spawn(Team.sharded, 100f, 100f);
--        assertFalse(Units.canCreate(Team.sharded, UnitTypes.flare), "a spawn counts at once");
--
--        //waves outside PvP have no cap
--        state.rules.pvp = false;
--        for(int i = 0; i < 6; i++) UnitTypes.dagger.spawn(state.rules.waveTeam, 100f, 100f);
--        assertTrue(Units.canCreate(state.rules.waveTeam, UnitTypes.dagger));
--    }
--}
+@@ -1,15 +1,20 @@
 +import arc.*;
 +import arc.util.*;
-+import mindustry.content.*;
-+import mindustry.entities.*;
-+import mindustry.game.*;
+ import mindustry.content.*;
+ import mindustry.entities.*;
+ import mindustry.game.*;
 +import mindustry.game.EventType.*;
-+import mindustry.gen.*;
-+import mindustry.type.*;
+ import mindustry.gen.*;
+ import mindustry.type.*;
 +import mindustry.world.*;
 +import mindustry.world.blocks.logic.LogicBlock.*;
-+import mindustryX.features.*;
-+import org.junit.jupiter.api.*;
-+
-+import static mindustry.Vars.*;
-+import static org.junit.jupiter.api.Assertions.*;
-+
+ import mindustryX.features.*;
+ import org.junit.jupiter.api.*;
+ 
+ import static mindustry.Vars.*;
+ import static org.junit.jupiter.api.Assertions.*;
+ 
+-/** The maxTeamUnits server config: off changes nothing, on limits what it says. */
 +/** The maxTeamUnits and logicBudget server configs: off changes nothing, on limits what it says. */
-+public class ServerLimitsTests{
-+
-+    @BeforeAll
-+    static void init(){
-+        ApplicationTests.launchApplication();
-+    }
-+
-+    @AfterEach
-+    void reset(){
-+        ServerLimits.maxTeamUnits.set(0);
+ public class ServerLimitsTests{
+ 
+     @BeforeAll
+@@ -20,6 +25,7 @@ public class ServerLimitsTests{
+     @AfterEach
+     void reset(){
+         ServerLimits.maxTeamUnits.set(0);
 +        ServerLimits.logicBudget.set(0);
-+    }
-+
-+    @Test
-+    void teamUnitCap(){
-+        world.loadMap(ApplicationTests.testMap);
-+        state.rules.unitCap = 1000;
-+        for(int i = 0; i < 5; i++) UnitTypes.dagger.spawn(Team.sharded, 100f, 100f);
-+        assertTrue(Units.canCreate(Team.sharded, UnitTypes.flare), "off by default");
-+
-+        ServerLimits.maxTeamUnits.set(5);
-+        assertFalse(Units.canCreate(Team.sharded, UnitTypes.flare), "the cap is per team, not per type");
-+
-+        //missiles do not count, and units leave the count as soon as they are removed, not on the next tick
-+        UnitType missile = content.units().find(t -> !t.useUnitCap && !t.internal);
-+        missile.spawn(Team.sharded, 100f, 100f);
-+        Groups.unit.find(u -> u.type == UnitTypes.dagger).remove();
-+        assertTrue(Units.canCreate(Team.sharded, UnitTypes.flare));
-+        UnitTypes.flare.spawn(Team.sharded, 100f, 100f);
-+        assertFalse(Units.canCreate(Team.sharded, UnitTypes.flare), "a spawn counts at once");
-+
-+        //waves outside PvP have no cap
-+        state.rules.pvp = false;
-+        for(int i = 0; i < 6; i++) UnitTypes.dagger.spawn(state.rules.waveTeam, 100f, 100f);
-+        assertTrue(Units.canCreate(state.rules.waveTeam, UnitTypes.dagger));
-+    }
+     }
+ 
+     @Test
+@@ -45,4 +51,56 @@ public class ServerLimitsTests{
+         for(int i = 0; i < 6; i++) UnitTypes.dagger.spawn(state.rules.waveTeam, 100f, 100f);
+         assertTrue(Units.canCreate(state.rules.waveTeam, UnitTypes.dagger));
+     }
 +
 +    @Test
 +    void logicBudgetScale(){
@@ -200,4 +132,4 @@ index d6e2c84f76f02aa2e03720f0f227a9d18c8c7aff..77b35f0aeb9c2fb6cc7a6e151946f1a8
 +        }
 +        return procs[0].executor.optionalVar("n").num();
 +    }
-+}
+ }

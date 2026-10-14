@@ -161,15 +161,15 @@ index 4883bc2ef85adc8509075121c9f03c87fae2a35e..3c59aebaa1c2610f974d160e82624162
          buffer.put((byte)state.rules.mode().ordinal());
          buffer.putInt(netServer.admins.getPlayerLimit());
 diff --git a/desktop/src/mindustry/desktop/DesktopLauncher.java b/desktop/src/mindustry/desktop/DesktopLauncher.java
-index 93c08a8c57af0ca959ba72b8f21ca3117159734f..af4294e362c5874e0baa9376187f6ccdd6eb5157 100644
+index 5e069349e7eb7cfbd2a7ef4a893ba1950089234f..ff8e8b5905a6949c3e088109f3069b7f00e552cc 100644
 --- a/desktop/src/mindustry/desktop/DesktopLauncher.java
 +++ b/desktop/src/mindustry/desktop/DesktopLauncher.java
-@@ -109,7 +109,7 @@ public class DesktopLauncher extends ClientLauncher{
-                         }
+@@ -110,7 +110,7 @@ public class DesktopLauncher extends ClientLauncher{
                      }
                  }
--                setWindowIcon(FileType.internal, "icons/icon_64.png");
-+                setWindowIcon(FileType.internal, "icon.png");
+                 if(!(OS.isMac && Version.build != -1)){
+-                    setWindowIcon(FileType.internal, "icons/icon.png");
++                    setWindowIcon(FileType.internal, "icon.png");
+                 }
              }});
          }catch(Throwable e){
-             handleCrash(e);
