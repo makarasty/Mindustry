@@ -1,0 +1,75 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 16:41:01 +0300
+Subject: [PATCH] OG(LAssembler): name numeric constants without
+ FloatingDecimal, one lookup per variable
+
+---
+ core/src/mindustry/logic/LAssembler.java      |  9 ++++--
+ tests/src/test/java/LAssemblerConstTests.java | 30 +++++++++++++++++++
+ 2 files changed, 36 insertions(+), 3 deletions(-)
+ create mode 100644 tests/src/test/java/LAssemblerConstTests.java
+
+diff --git a/core/src/mindustry/logic/LAssembler.java b/core/src/mindustry/logic/LAssembler.java
+index c2c40ea97c160a9d1ac15b9fd052d967562de246..55f09ca2337575cc368b0314efbdb1db7f1216d4 100644
+--- a/core/src/mindustry/logic/LAssembler.java
++++ b/core/src/mindustry/logic/LAssembler.java
+@@ -74,7 +74,8 @@ public class LAssembler{
+         }else{
+             if(Double.isInfinite(value)) value = 0.0;
+             //this creates a hidden const variable with the specified value
+-            return putConst("___" + value, value);
++            //MDTX: same name as "___" + value; Double.toString prints integral values below 1e7 as "<long>.0", without the slow FloatingDecimal path
++            return putConst(value == (long)value && Math.abs(value) < 1e7 && !(value == 0 && 1 / value < 0) ? "___" + (long)value + ".0" : "___" + value, value);
+         }
+     }
+ 
+@@ -184,8 +185,10 @@ public class LAssembler{
+ 
+     /** Registers a variable name mapping. */
+     public LVar putVar(String name){
+-        if(vars.containsKey(name)){
+-            return vars.get(name);
++        //MDTX: one lookup instead of containsKey + get; vars never maps to null
++        LVar existing = vars.get(name);
++        if(existing != null){
++            return existing;
+         }else{
+             //variables are null objects by default
+             LVar var = new LVar(name);
+diff --git a/tests/src/test/java/LAssemblerConstTests.java b/tests/src/test/java/LAssemblerConstTests.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..28696a60269e12f856c281ac3d44498d0a745587
+--- /dev/null
++++ b/tests/src/test/java/LAssemblerConstTests.java
+@@ -0,0 +1,30 @@
++import mindustry.logic.*;
++import org.junit.jupiter.api.*;
++
++import static org.junit.jupiter.api.Assertions.*;
++
++/** Hidden numeric constants keep the names "___" + value has always given them; saves store variables by name. */
++public class LAssemblerConstTests{
++
++    @BeforeAll
++    static void init(){
++        ApplicationTests.launchApplication();
++    }
++
++    @Test
++    void constNamesMatchDoubleToString(){
++        String[] literals = {"0", "-0", "5", "-5", "0.5", "9999999", "-9999999", "10000000", "1e7", "123456789", "3.25", "0x10", "-0.0", "1e-3", "2147483648", "%ff0000"};
++        StringBuilder code = new StringBuilder();
++        for(int i = 0; i < literals.length; i++) code.append("set v").append(i).append(' ').append(literals[i]).append('\n');
++        LAssembler asm = LAssembler.assemble(code.toString(), true);
++        int consts = 0;
++        for(var entry : asm.vars){
++            LVar var = entry.value;
++            if(entry.key.startsWith("___") && !var.isobj){
++                consts++;
++                assertEquals("___" + var.numval, entry.key);
++            }
++        }
++        assertTrue(consts >= 12, "expected the numeric literals to become constants, got " + consts);
++    }
++}

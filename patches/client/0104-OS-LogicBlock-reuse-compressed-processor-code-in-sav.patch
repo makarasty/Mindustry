@@ -1,0 +1,162 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 16:41:01 +0300
+Subject: [PATCH] OS(LogicBlock): reuse compressed processor code in saves and
+ world data
+
+---
+ .../world/blocks/logic/LogicBlock.java        | 35 +++++++-
+ tests/src/test/java/LogicCompressTests.java   | 81 +++++++++++++++++++
+ 2 files changed, 114 insertions(+), 2 deletions(-)
+ create mode 100644 tests/src/test/java/LogicCompressTests.java
+
+diff --git a/core/src/mindustry/world/blocks/logic/LogicBlock.java b/core/src/mindustry/world/blocks/logic/LogicBlock.java
+index 1f53394de33d66ea491452344c00cb37f809b831..78ac44d525fc1738489117ac627bf036f18e4e01 100644
+--- a/core/src/mindustry/world/blocks/logic/LogicBlock.java
++++ b/core/src/mindustry/world/blocks/logic/LogicBlock.java
+@@ -158,10 +158,15 @@ public class LogicBlock extends Block{
+         return compress(code.getBytes(charset), links);
+     }
+ 
++    /** MDTX: a Deflater per call costs a native init of ~300 KB; a save calls this once per processor. Same level, same bytes. */
++    private static final ThreadLocal<Deflater> compressor = ThreadLocal.withInitial(Deflater::new);
++
+     public static byte[] compress(byte[] bytes, Seq<LogicLink> links){
+         try{
+             var baos = new ByteArrayOutputStream();
+-            var stream = new DataOutputStream(new DeflaterOutputStream(baos));
++            Deflater deflater = compressor.get();
++            deflater.reset();
++            var stream = new DataOutputStream(new DeflaterOutputStream(baos, deflater));
+ 
+             //current version of config format
+             stream.write(1);
+@@ -695,6 +700,32 @@ public class LogicBlock extends Block{
+             return compress(code, relativeConnections());
+         }
+ 
++        //MDTX: compressed code and links as last written; saves and world data for joining players rewrite every processor
++        private @Nullable String savedCode;
++        private int[] savedLinkPos = {};
++        private String[] savedLinkNames = {};
++        private byte[] savedBytes;
++
++        /** MDTX: compress(code, links), reused while the code object and every link's position and name are unchanged. */
++        byte[] savedCompressed(){
++            boolean same = savedBytes != null && savedCode == code && savedLinkPos.length == links.size;
++            for(int i = 0; same && i < links.size; i++){
++                LogicLink l = links.get(i);
++                same = savedLinkPos[i] == Point2.pack(l.x, l.y) && savedLinkNames[i].equals(l.name);
++            }
++            if(!same){
++                savedBytes = compress(code, links);
++                savedCode = code;
++                savedLinkPos = new int[links.size];
++                savedLinkNames = new String[links.size];
++                for(int i = 0; i < links.size; i++){
++                    savedLinkPos[i] = Point2.pack(links.get(i).x, links.get(i).y);
++                    savedLinkNames[i] = links.get(i).name;
++                }
++            }
++            return savedBytes;
++        }
++
+         public Seq<LogicLink> relativeConnections(){
+             var copy = new Seq<LogicLink>(links.size);
+             for(var l : links){
+@@ -836,7 +867,7 @@ public class LogicBlock extends Block{
+         public void write(Writes write){
+             super.write(write);
+ 
+-            byte[] compressed = compress(code, links);
++            byte[] compressed = savedCompressed();
+             write.i(compressed.length);
+             write.b(compressed);
+ 
+diff --git a/tests/src/test/java/LogicCompressTests.java b/tests/src/test/java/LogicCompressTests.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..ba6e15cd95eba149b3bb6362f1eaf693ecc37836
+--- /dev/null
++++ b/tests/src/test/java/LogicCompressTests.java
+@@ -0,0 +1,81 @@
++import arc.math.*;
++import arc.struct.*;
++import mindustry.world.blocks.logic.*;
++import mindustry.world.blocks.logic.LogicBlock.*;
++import mindustry.content.*;
++import mindustry.game.*;
++import mindustry.world.*;
++import org.junit.jupiter.api.*;
++
++import java.lang.reflect.*;
++
++import java.io.*;
++import java.util.zip.*;
++
++import static mindustry.Vars.*;
++import static org.junit.jupiter.api.Assertions.*;
++
++/** LogicBlock.compress reuses one Deflater; the bytes must equal a fresh default Deflater's, as saves and configs store them. */
++public class LogicCompressTests{
++
++    @BeforeAll
++    static void init(){
++        ApplicationTests.launchApplication();
++    }
++
++    @Test
++    void savedBytesFollowEveryChange() throws Exception{
++        state.rules = new Rules();
++        Tiles tiles = world.resize(20, 20);
++        world.beginMapLoad();
++        tiles.fill();
++        world.endMapLoad();
++        world.tile(10, 10).setBlock(Blocks.microProcessor, Team.sharded);
++        var build = (LogicBuild)world.build(10, 10);
++        Method saved = LogicBuild.class.getDeclaredMethod("savedCompressed");
++        saved.setAccessible(true);
++        Rand r = new Rand(9);
++
++        for(int i = 0; i < 500; i++){
++            switch(r.random(5)){
++                case 0 -> build.updateCode("op add n n " + r.random(100) + "\ndraw rect 0 0 1 1");
++                case 1 -> build.links.add(new LogicLink(r.random(30), r.random(30), "cell" + r.random(5), false));
++                case 2 -> { if(build.links.any()) build.links.remove(r.random(build.links.size - 1)); }
++                case 3 -> { if(build.links.any()) build.links.random(r).name = "switch" + r.random(5); }
++                case 4 -> { if(build.links.any()) build.links.random(r).x = r.random(30); }
++                default -> {}
++            }
++            assertArrayEquals(LogicBlock.compress(build.code, build.links), (byte[])saved.invoke(build), "step " + i);
++        }
++    }
++
++    static byte[] reference(byte[] bytes, Seq<LogicLink> links) throws IOException{
++        var baos = new ByteArrayOutputStream();
++        var stream = new DataOutputStream(new DeflaterOutputStream(baos));
++        stream.write(1);
++        stream.writeInt(bytes.length);
++        stream.write(bytes);
++        stream.writeInt(links.size);
++        for(LogicLink link : links){
++            stream.writeUTF(link.name);
++            stream.writeShort(link.x);
++            stream.writeShort(link.y);
++        }
++        stream.close();
++        return baos.toByteArray();
++    }
++
++    @Test
++    void sameBytesAsAFreshDeflater() throws IOException{
++        Rand r = new Rand(8);
++        for(int i = 0; i < 300; i++){
++            StringBuilder code = new StringBuilder();
++            int lines = r.random(0, 400);
++            for(int l = 0; l < lines; l++) code.append("draw rect ").append(r.random(200)).append(' ').append(r.random(200)).append(" 4 4\n");
++            Seq<LogicLink> links = new Seq<>();
++            for(int l = r.random(0, 10); l > 0; l--) links.add(new LogicLink(r.random(-50, 50), r.random(-50, 50), "cell" + l, true));
++            byte[] bytes = code.toString().getBytes("UTF-8");
++            assertArrayEquals(reference(bytes, links), LogicBlock.compress(bytes, links), "case " + i);
++        }
++    }
++}

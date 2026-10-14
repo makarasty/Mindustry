@@ -1,0 +1,24 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 16:18:51 +0300
+Subject: [PATCH] OS(Administration): one player record scan per IP ban check
+
+---
+ core/src/mindustry/net/Administration.java | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/core/src/mindustry/net/Administration.java b/core/src/mindustry/net/Administration.java
+index ff6aad4c6c68e8aa0223440b1e68e77a6aa73967..f4715a12b89dbe7c23bdd9fa96c1a0357f1ff64c 100644
+--- a/core/src/mindustry/net/Administration.java
++++ b/core/src/mindustry/net/Administration.java
+@@ -398,7 +398,9 @@ public class Administration{
+     }
+ 
+     public boolean isIPBanned(String ip){
+-        return bannedIPs.contains(ip, false) || (findByIP(ip) != null && findByIP(ip).banned) || (steam && ip.startsWith("steam") && SteamAdmin.isBanned(ip));
++        //MDTX: findByIP scans every player record, do it once (it ran twice per call, and this runs twice per join)
++        PlayerInfo info;
++        return bannedIPs.contains(ip, false) || ((info = findByIP(ip)) != null && info.banned) || (steam && ip.startsWith("steam") && SteamAdmin.isBanned(ip));
+     }
+ 
+     public boolean isIDBanned(String uuid){

@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 16:18:51 +0300
+Subject: [PATCH] OG(Bullet): bullets that cannot collide skip the unit tree
+ queries
+
+---
+ core/src/mindustry/entities/comp/BulletComp.java | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/core/src/mindustry/entities/comp/BulletComp.java b/core/src/mindustry/entities/comp/BulletComp.java
+index bcc083327ce471734caa0ac5baf5e1c1630b12f1..e4310abac0483ffb77115f323256466eb9db9107 100644
+--- a/core/src/mindustry/entities/comp/BulletComp.java
++++ b/core/src/mindustry/entities/comp/BulletComp.java
+@@ -59,6 +59,8 @@ abstract class BulletComp implements Timedc, Damagec, Hitboxc, Teamc, Posc, Draw
+ 
+     @Override
+     public void getCollisions(Cons<QuadTree> consumer){
++        //MDTX: collides(other) starts with type.collides, so nothing a query returns could be hit
++        if(!type.collides) return;
+         Seq<TeamData> data = state.teams.present;
+         for(int i = 0; i < data.size; i++){
+             if(data.items[i].team != team){

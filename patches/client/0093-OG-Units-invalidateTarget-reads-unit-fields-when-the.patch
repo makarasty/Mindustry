@@ -1,0 +1,55 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 16:18:51 +0300
+Subject: [PATCH] OG(Units): invalidateTarget reads unit fields when the unit
+ tree fast path is on
+
+---
+ core/src/mindustry/entities/Units.java | 5 +++++
+ core/src/mindustry/game/Teams.java     | 3 ++-
+ tests/src/test/java/UnitTreeTests.java | 2 ++
+ 3 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/core/src/mindustry/entities/Units.java b/core/src/mindustry/entities/Units.java
+index aa193c8f5a246afcb061e9e7b3288fcc764b4797..bec8c54beeda21849106759e534c4cc0264d0753 100644
+--- a/core/src/mindustry/entities/Units.java
++++ b/core/src/mindustry/entities/Units.java
+@@ -153,6 +153,11 @@ public class Units{
+      * @return whether the target is invalid
+      */
+     public static boolean invalidateTarget(Posc target, Team team, float x, float y, float range){
++        if(UnitTree.plain && target instanceof Unit u){
++            //MDTX: the checks below with the generated within/hitSize/team read as fields instead of megamorphic interface calls
++            float dst = range + u.hitSize/2f;
++            return (range != Float.MAX_VALUE && !(Mathf.dst2(u.x, u.y, x, y) < dst*dst)) || u.team == team || !u.isValid() || !u.targetable(team);
++        }
+         return target == null ||
+             (range != Float.MAX_VALUE && !target.within(x, y, range + (target instanceof Sized hb ? hb.hitSize()/2f : 0f))) ||
+             (target instanceof Teamc t && t.team() == team) ||
+diff --git a/core/src/mindustry/game/Teams.java b/core/src/mindustry/game/Teams.java
+index b1e7f22ecd478e44cf185072f75f66de22098ae3..7ea41280be1f68c630acf3b66df47b446b88ee9d 100644
+--- a/core/src/mindustry/game/Teams.java
++++ b/core/src/mindustry/game/Teams.java
+@@ -561,7 +561,8 @@ public class Teams{
+                 try{
+                     Class<?> c = type.sample.getClass();
+                     result &= generated(c.getMethod("hitbox", Rect.class)) && generated(c.getMethod("getX")) && generated(c.getMethod("getY")) && generated(c.getMethod("damaged"))
+-                        && generated(c.getMethod("within", float.class, float.class, float.class));
++                        && generated(c.getMethod("within", float.class, float.class, float.class))
++                        && generated(c.getMethod("hitSize")) && generated(c.getMethod("team"));
+                 }catch(NoSuchMethodException e){
+                     result = false;
+                 }
+diff --git a/tests/src/test/java/UnitTreeTests.java b/tests/src/test/java/UnitTreeTests.java
+index 22a7547ea82c173dae48913d947bce11bbb17ad4..88bd5a47edf25d0f2c0a802b06f2c37cb8a048a9 100644
+--- a/tests/src/test/java/UnitTreeTests.java
++++ b/tests/src/test/java/UnitTreeTests.java
+@@ -46,6 +46,8 @@ public class UnitTreeTests{
+                 b.setCentered(u.x, u.y, u.hitSize, u.hitSize);
+                 assertTrue(a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height, type.name + " hitbox");
+                 assertEquals(u.damaged(), u.health < u.maxHealth - 0.001f, type.name + " damaged");
++                assertEquals(u.hitSize(), u.hitSize, type.name + " hitSize");
++                assertSame(u.team(), u.team, type.name + " team");
+ 
+                 float x = r.range(1000f), y = r.range(1000f), d = r.random(500f);
+                 assertEquals(u.within(x, y, d), Mathf.dst2(u.x, u.y, x, y) < d * d, type.name + " within");

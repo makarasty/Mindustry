@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 15:59:33 +0300
+Subject: [PATCH] OG(QuadTree): insert computes the hitbox again only after a
+ split
+
+---
+ arc-core/src/arc/math/geom/QuadTree.java | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/arc-core/src/arc/math/geom/QuadTree.java b/arc-core/src/arc/math/geom/QuadTree.java
+index d2a67e6f3c598188bbd2dfae02f8b8f015cb896e..cf52bd7ca7f8f1203f1c1a7820051c5d06626d61 100755
+--- a/arc-core/src/arc/math/geom/QuadTree.java
++++ b/arc-core/src/arc/math/geom/QuadTree.java
+@@ -89,13 +89,16 @@ public class QuadTree<T extends QuadTreeObject>{
+ 
+         totalObjects ++;
+ 
+-        if(leaf && objects.size + 1 > maxObjectsPerNode) split();
++        if(leaf && objects.size + 1 > maxObjectsPerNode){
++            split();
++            //split() reuses tmp; otherwise it still holds this object's hitbox from above
++            hitbox(obj);
++        }
+ 
+         if(leaf){
+             // Leaf, so no need to add to children, just add to root
+             objects.add(obj);
+         }else{
+-            hitbox(obj);
+             // Add to relevant child, or root if can't fit completely in a child
+             QuadTree<T> child = getFittingChild(tmp);
+             if(child != null){

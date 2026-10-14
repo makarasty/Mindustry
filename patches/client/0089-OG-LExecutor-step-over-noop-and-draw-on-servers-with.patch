@@ -1,0 +1,165 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 16:18:50 +0300
+Subject: [PATCH] OG(LExecutor): step over noop, and draw on servers, without
+ dispatching
+
+---
+ core/src/mindustry/logic/LExecutor.java       | 31 +++++++
+ .../world/blocks/logic/LogicBlock.java        |  6 ++
+ tests/src/test/java/LogicSkipTests.java       | 86 +++++++++++++++++++
+ 3 files changed, 123 insertions(+)
+ create mode 100644 tests/src/test/java/LogicSkipTests.java
+
+diff --git a/core/src/mindustry/logic/LExecutor.java b/core/src/mindustry/logic/LExecutor.java
+index 7d1a8e3022ae787b578ec760f7d681a10ceb857f..62175e7ed1848aa534e40c74296a78633e276c0a 100644
+--- a/core/src/mindustry/logic/LExecutor.java
++++ b/core/src/mindustry/logic/LExecutor.java
+@@ -123,6 +123,37 @@ public class LExecutor{
+         }
+     }
+ 
++    //MDTX: per instruction, whether running it changes nothing but the counter: noop, and draw on a headless server
++    private boolean[] noop;
++    private boolean anyNoop;
++    private LInstruction[] noopOf;
++
++    /** MDTX: rebuilds the flags if the instructions changed; false if the program has nothing to skip, then skipNoop() need not be called. */
++    public boolean prepareSkip(){
++        if(noopOf != instructions){
++            noopOf = instructions;
++            noop = new boolean[instructions.length];
++            anyNoop = false;
++            for(int i = 0; i < noop.length; i++){
++                Class<?> type = instructions[i].getClass();
++                anyNoop |= noop[i] = type == NoopI.class || (headless && type == DrawI.class);
++            }
++        }
++        return anyNoop;
++    }
++
++    /** MDTX: after prepareSkip(): if the next instruction does nothing, advances the counter exactly as runOnce() would and returns true. */
++    public boolean skipNoop(){
++        double c = counter.numval;
++        if(c >= noop.length || c < 0) c = 0;
++        if(c < noop.length && noop[(int)c]){
++            counter.isobj = false;
++            counter.numval = c + 1;
++            return true;
++        }
++        return false;
++    }
++
+     /** Loads with a specified assembler. Resets all variables. */
+     public void load(LAssembler builder){
+         stop = false;
+diff --git a/core/src/mindustry/world/blocks/logic/LogicBlock.java b/core/src/mindustry/world/blocks/logic/LogicBlock.java
+index cc7d568885bbe18da59e2e78d485ad0e8d9502e2..3a841400a3c872c3f95cd94cb4dfde79f67fc345 100644
+--- a/core/src/mindustry/world/blocks/logic/LogicBlock.java
++++ b/core/src/mindustry/world/blocks/logic/LogicBlock.java
+@@ -588,7 +588,13 @@ public class LogicBlock extends Block{
+ 
+                 running = true;
+                 boolean waited = false;
++                //MDTX: step over instructions that do nothing here without dispatching them (most player code is draw)
++                boolean skip = executor.prepareSkip();
+                 while(accumulator >= 1f){
++                    if(skip && executor.skipNoop()){
++                        accumulator --;
++                        continue;
++                    }
+                     executor.runOnce();
+                     if(executor.yield){
+                         executor.yield = false;
+diff --git a/tests/src/test/java/LogicSkipTests.java b/tests/src/test/java/LogicSkipTests.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..d5f5ae2ea59f27e34472865e3ce1d1381d628a22
+--- /dev/null
++++ b/tests/src/test/java/LogicSkipTests.java
+@@ -0,0 +1,86 @@
++import arc.math.*;
++import mindustry.logic.*;
++import org.junit.jupiter.api.*;
++
++import static org.junit.jupiter.api.Assertions.*;
++
++/** LExecutor.skipNoop() must leave exactly the state runOnce() would: draw and noop do nothing on a headless server. */
++public class LogicSkipTests{
++
++    @BeforeAll
++    static void init(){
++        ApplicationTests.launchApplication();
++    }
++
++    static LExecutor load(String code){
++        LExecutor exec = new LExecutor();
++        exec.privileged = true;
++        exec.load(LAssembler.assemble(code, true));
++        return exec;
++    }
++
++    /** Runs the same program with and without skipping and compares every variable after every step. */
++    void compare(String code, int steps){
++        LExecutor plain = load(code), skipping = load(code);
++        for(int i = 0; i < steps; i++){
++            plain.runOnce();
++            if(!(skipping.prepareSkip() && skipping.skipNoop())) skipping.runOnce();
++            for(int v = 0; v < plain.vars.length; v++){
++                LVar a = plain.vars[v], b = skipping.vars[v];
++                assertEquals(a.isobj, b.isobj, "step " + i + " " + a.name);
++                assertEquals(Double.doubleToRawLongBits(a.numval), Double.doubleToRawLongBits(b.numval), "step " + i + " " + a.name);
++                assertEquals(a.objval, b.objval, "step " + i + " " + a.name);
++            }
++        }
++    }
++
++    @Test
++    void drawOnlyProgram(){
++        compare("""
++            draw clear 0 0 0
++            draw color 255 0 0 255
++            draw rect 0 0 10 10
++            drawflush display1
++            noop
++            """, 200);
++    }
++
++    @Test
++    void mixedProgramWithCounterWrites(){
++        compare("""
++            op add n n 1
++            draw rect n 0 1 1
++            jump 5 greaterThan n 50
++            noop
++            end
++            set @counter 1.5
++            draw clear 0 0 0
++            op mul x n 0.5
++            set @counter -3
++            """, 400);
++    }
++
++    @Test
++    void counterOutOfRangeOrNaN(){
++        Rand r = new Rand(4);
++        for(int i = 0; i < 50; i++){
++            String target = switch(i % 4){
++                case 0 -> String.valueOf(r.random(-5, 20));
++                case 1 -> String.valueOf(r.random(-5f, 20f));
++                case 2 -> "1e300";
++                default -> "x";
++            };
++            compare("draw rect 0 0 1 1\nop div x 0 0\nset @counter " + target + "\nnoop\ndraw color 1 1 1 1\n", 60);
++        }
++    }
++
++    @Test
++    void reloadedCodeIsRechecked(){
++        LExecutor exec = load("draw rect 0 0 1 1\nop add n n 1");
++        assertTrue(exec.prepareSkip() && exec.skipNoop());
++        exec.load(LAssembler.assemble("op add n n 1\ndraw rect 0 0 1 1", true));
++        assertFalse(exec.prepareSkip() && exec.skipNoop(), "flags must follow the new instructions");
++        exec.load(LAssembler.assemble("op add n n 1", true));
++        assertFalse(exec.prepareSkip(), "nothing to skip");
++    }
++}

@@ -1,0 +1,109 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 16:18:50 +0300
+Subject: [PATCH] OG(Unloader): nulloaders skip the per-item scan when no
+ neighbour has anything to give
+
+---
+ .../world/blocks/storage/Unloader.java        | 12 +++-
+ tests/src/test/java/UnloaderSkipTests.java    | 61 +++++++++++++++++++
+ 2 files changed, 72 insertions(+), 1 deletion(-)
+ create mode 100644 tests/src/test/java/UnloaderSkipTests.java
+
+diff --git a/core/src/mindustry/world/blocks/storage/Unloader.java b/core/src/mindustry/world/blocks/storage/Unloader.java
+index 3fa827bf04824d33dbf6cfaf5dd40cbdf6edbda6..341bb34f166ee2e173b7940dd1240714c10d7869 100644
+--- a/core/src/mindustry/world/blocks/storage/Unloader.java
++++ b/core/src/mindustry/world/blocks/storage/Unloader.java
+@@ -112,6 +112,16 @@ public class Unloader extends Block{
+             return Integer.compare(y.lastUsed, x.lastUsed); //inverted
+         };
+ 
++        /** MDTX: false when no neighbour that can give holds anything; isPossibleItem is then false for every item (counts are never negative). */
++        private boolean anyItemToGive(){
++            var pbi = possibleBlocks.items;
++            for(int i = 0, l = possibleBlocks.size; i < l; i++){
++                var other = pbi[i].building;
++                if(other.items != null && other.items.total() > 0 && other.canUnload()) return true;
++            }
++            return false;
++        }
++
+         private boolean isPossibleItem(Item item){
+             boolean hasProvider = false,
+             hasReceiver = false,
+@@ -183,7 +193,7 @@ public class Unloader extends Block{
+ 
+             if(sortItem != null){
+                 if(isPossibleItem(sortItem)) item = sortItem;
+-            }else{
++            }else if(anyItemToGive()){
+                 //selects the next item for nulloaders
+                 //inspired of nextIndex() but for all "proximity" (possibleBlocks) at once, and also way more powerful
+                 for(int i = 0, l = allItems.length; i < l; i++){
+diff --git a/tests/src/test/java/UnloaderSkipTests.java b/tests/src/test/java/UnloaderSkipTests.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..a02b888280ef8577d0bea7fc21743e50a0eb3a26
+--- /dev/null
++++ b/tests/src/test/java/UnloaderSkipTests.java
+@@ -0,0 +1,61 @@
++import arc.math.*;
++import mindustry.content.*;
++import mindustry.game.*;
++import mindustry.type.*;
++import mindustry.world.*;
++import mindustry.world.blocks.storage.Unloader.*;
++import org.junit.jupiter.api.*;
++
++import java.lang.reflect.*;
++
++import static mindustry.Vars.*;
++import static org.junit.jupiter.api.Assertions.*;
++
++/** A nulloader skips its per-item scan when no giving neighbour holds anything; that must never hide an item it could move. */
++public class UnloaderSkipTests{
++
++    @BeforeAll
++    static void init(){
++        ApplicationTests.launchApplication();
++    }
++
++    @Test
++    void noItemToGiveMeansNoPossibleItem() throws Exception{
++        Method any = UnloaderBuild.class.getDeclaredMethod("anyItemToGive"), possible = UnloaderBuild.class.getDeclaredMethod("isPossibleItem", Item.class);
++        any.setAccessible(true);
++        possible.setAccessible(true);
++        Block[] around = {Blocks.container, Blocks.container, Blocks.sorter, Blocks.router, Blocks.conveyor, Blocks.junction, Blocks.unloader, Blocks.air};
++        Rand r = new Rand(6);
++        int empty = 0;
++
++        for(int i = 0; i < 400; i++){
++            state.rules = new Rules();
++            Tiles tiles = world.resize(9, 9);
++            world.beginMapLoad();
++            tiles.fill();
++            world.endMapLoad();
++            world.tile(4, 4).setBlock(Blocks.unloader, Team.sharded);
++            //a 2x2 block placed at (x, y) covers x..x+1 and y..y+1, so the left and bottom ones start two tiles away
++            int[][] spots1 = {{5, 4}, {3, 4}, {4, 5}, {4, 3}}, spots2 = {{5, 4}, {2, 4}, {4, 5}, {4, 2}};
++            for(int k = 0; k < 4; k++){
++                Block b = around[r.random(around.length - 1)];
++                int x = b.size == 2 ? spots2[k][0] : spots1[k][0], y = b.size == 2 ? spots2[k][1] : spots1[k][1];
++                world.tile(x, y).setBlock(b, r.chance(0.8) ? Team.sharded : Team.crux, r.random(3));
++                var build = world.build(x, y);
++                if(build != null && build.items != null && r.chance(0.6)){
++                    build.items.add(content.item(r.random(content.items().size - 1)), r.random(1, 5));
++                }
++            }
++            var unloader = (UnloaderBuild)world.build(4, 4);
++            unloader.onProximityUpdate();
++
++            if(!(boolean)any.invoke(unloader)){
++                empty++;
++                for(Item item : content.items()){
++                    assertFalse((boolean)possible.invoke(unloader, item), "setup " + i + " " + item.name);
++                }
++            }
++        }
++        assertTrue(empty > 20, "the test should hit empty neighbourhoods, got " + empty);
++    }
++}

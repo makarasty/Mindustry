@@ -1,0 +1,51 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 16:18:51 +0300
+Subject: [PATCH] OS(SaveIO): buffer saves, world data and map loading around
+ the deflater and inflater
+
+---
+ core/src/mindustry/core/NetServer.java | 4 +++-
+ core/src/mindustry/io/SaveIO.java      | 7 +++++--
+ 2 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/core/src/mindustry/core/NetServer.java b/core/src/mindustry/core/NetServer.java
+index cbc089ebbfe311a5a7a26cb2fb2f88046de998ea..f13b978413b13d34d12c446ec8bdc212ebda9448 100644
+--- a/core/src/mindustry/core/NetServer.java
++++ b/core/src/mindustry/core/NetServer.java
+@@ -546,7 +546,9 @@ public class NetServer implements ApplicationListener{
+ 
+     public void sendWorldData(Player player){
+         var stream = new ByteArrayOutputStream();
+-        NetworkIO.writeWorld(player, new FastDeflaterOutputStream(stream));
++        OutputStream os = new FastDeflaterOutputStream(stream);
++        //MDTX: batch the tiny writes before the deflater, one native call each otherwise
++        NetworkIO.writeWorld(player, headless ? new BufferedOutputStream(os, 1 << 15) : os);
+         player.con.sendStream(new WorldStream(), stream);
+ 
+         debug("Packed @ of world data to @ (@ / @)", Strings.formatByteCount(stream.size()), player.name, player.con.address, player.uuid());
+diff --git a/core/src/mindustry/io/SaveIO.java b/core/src/mindustry/io/SaveIO.java
+index aac5f642c24f61b56657ea4cc7967940533a267f..84d7cf8e801429ac61015783d7963ec72d628dd3 100644
+--- a/core/src/mindustry/io/SaveIO.java
++++ b/core/src/mindustry/io/SaveIO.java
+@@ -116,7 +116,9 @@ public class SaveIO{
+     }
+ 
+     public static void write(Fi file, SaveOptions options){
+-        write(new FastDeflaterOutputStream(file.write(false, bufferSize)), options);
++        OutputStream os = new FastDeflaterOutputStream(file.write(false, bufferSize));
++        //MDTX: saves write 1-4 bytes at a time and the deflater makes a native call per write; batch them on servers
++        write(headless ? new BufferedOutputStream(os, 1 << 16) : os, options);
+     }
+ 
+     public static void write(Fi file){
+@@ -161,7 +163,8 @@ public class SaveIO{
+ 
+     /** Loads from a deflated (!) input stream. */
+     public static void load(InputStream is, WorldContext context) throws SaveException{
+-        try(CounterInputStream counter = new CounterInputStream(is); DataInputStream stream = new DataInputStream(counter)){
++        //MDTX: the inflater makes a native call per tiny read; buffer under the counter so region length checks still count consumed bytes
++        try(CounterInputStream counter = new CounterInputStream(headless ? new BufferedInputStream(is, 1 << 16) : is); DataInputStream stream = new DataInputStream(counter)){
+             logic.reset();
+             readHeader(stream);
+             int version = stream.readInt();

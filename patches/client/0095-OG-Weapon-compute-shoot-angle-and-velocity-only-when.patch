@@ -1,0 +1,34 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 16:18:51 +0300
+Subject: [PATCH] OG(Weapon): compute shoot angle and velocity only when they
+ are read
+
+---
+ core/src/mindustry/type/Weapon.java | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/core/src/mindustry/type/Weapon.java b/core/src/mindustry/type/Weapon.java
+index e3fa7644e3bee4bb3f1bce24c960c660f57d3035..74f63e93c0e1f093f1ae6b7d8707be51abd6c303 100644
+--- a/core/src/mindustry/type/Weapon.java
++++ b/core/src/mindustry/type/Weapon.java
+@@ -405,7 +405,8 @@ public class Weapon implements Cloneable{
+         weaponRotation = unit.rotation - 90 + (rotate ? mount.rotation : baseRotation),
+         bulletX = mountX + Angles.trnsx(weaponRotation, this.shootX, this.shootY),
+         bulletY = mountY + Angles.trnsy(weaponRotation, this.shootX, this.shootY),
+-        shootAngle = bulletRotation(unit, mount, bulletX, bulletY);
++        //MDTX: only the continuous branch and shoot() below read it
++        shootAngle = mount.shoot || alwaysShooting || (continuous && mount.bullet != null) ? bulletRotation(unit, mount, bulletX, bulletY) : 0f;
+ 
+         if(alwaysShooting) mount.shoot = true;
+ 
+@@ -463,7 +464,8 @@ public class Weapon implements Cloneable{
+             Vars.control.sound.loop(activeSound, unit, activeSoundVolume);
+         }
+ 
+-        float velLen = unit.isRemote() ? unit.vel.len() : unit.deltaLen() / Time.delta;
++        //MDTX: only read after the mount.shoot check
++        float velLen = mount.shoot ? (unit.isRemote() ? unit.vel.len() : unit.deltaLen() / Time.delta) : 0f;
+ 
+         //shoot if applicable
+         if(mount.shoot && //must be shooting

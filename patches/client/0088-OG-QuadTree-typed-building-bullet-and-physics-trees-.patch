@@ -1,0 +1,117 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 16:18:50 +0300
+Subject: [PATCH] OG(QuadTree): typed building, bullet and physics trees so
+ hitbox calls are monomorphic
+
+---
+ core/src/mindustry/ai/BlockIndexer.java      | 20 +++++++++++++++++++-
+ core/src/mindustry/async/PhysicsProcess.java | 19 ++++++++++++++++++-
+ core/src/mindustry/entities/EntityGroup.java | 19 ++++++++++++++++++-
+ 3 files changed, 55 insertions(+), 3 deletions(-)
+
+diff --git a/core/src/mindustry/ai/BlockIndexer.java b/core/src/mindustry/ai/BlockIndexer.java
+index c72dd992945c8fbebee7a3950246b9f56d3f7392..60220c3cb2da2007761a5857c223ae6ef02f99c5 100644
+--- a/core/src/mindustry/ai/BlockIndexer.java
++++ b/core/src/mindustry/ai/BlockIndexer.java
+@@ -619,7 +619,7 @@ public class BlockIndexer{
+ 
+             //insert the new tile into the quadtree for targeting
+             if(data.buildingTree == null){
+-                data.buildingTree = new QuadTree<>(new Rect(0, 0, world.unitWidth(), world.unitHeight()));
++                data.buildingTree = new BuildingQuadtree(new Rect(0, 0, world.unitWidth(), world.unitHeight()));
+             }
+             data.buildingTree.insert(tile.build);
+ 
+@@ -645,6 +645,24 @@ public class BlockIndexer{
+ 
+     }
+ 
++    /** Same hitbox as QuadTree, but its own call site: the shared one sees every tree's element type and is megamorphic. */
++    static class BuildingQuadtree extends QuadTree<Building>{
++
++        public BuildingQuadtree(Rect bounds){
++            super(bounds);
++        }
++
++        @Override
++        public void hitbox(Building build){
++            build.hitbox(tmp);
++        }
++
++        @Override
++        protected QuadTree<Building> newChild(Rect rect){
++            return new BuildingQuadtree(rect);
++        }
++    }
++
+     static class TurretQuadtree extends QuadTree<Building>{
+ 
+         public TurretQuadtree(Rect bounds){
+diff --git a/core/src/mindustry/async/PhysicsProcess.java b/core/src/mindustry/async/PhysicsProcess.java
+index a3d349f6c9226b6781a6b099ef7988c877e05806..eede01d84ff7c96cbd6bd03c2daec04bcbec36dc 100644
+--- a/core/src/mindustry/async/PhysicsProcess.java
++++ b/core/src/mindustry/async/PhysicsProcess.java
+@@ -175,7 +175,7 @@ public class PhysicsProcess implements AsyncProcess{
+         private final Rand rand = new Rand();
+ 
+         public PhysicsWorld(Rect bounds){
+-            tree = new QuadTree<>(new Rect(bounds));
++            tree = new BodyTree(new Rect(bounds));
+         }
+ 
+         public void add(PhysicsBody body){
+@@ -253,6 +253,23 @@ public class PhysicsProcess implements AsyncProcess{
+             maxPhysicsTime = Math.max(maxPhysicsTime, Time.timeSinceNanos(begin));
+         }
+ 
++        /** Same hitbox as QuadTree, but its own call site: the shared one sees every tree's element type and is megamorphic. */
++        static class BodyTree extends QuadTree<PhysicsBody>{
++            BodyTree(Rect bounds){
++                super(bounds);
++            }
++
++            @Override
++            protected void hitbox(PhysicsBody body){
++                body.hitbox(tmp);
++            }
++
++            @Override
++            protected QuadTree<PhysicsBody> newChild(Rect rect){
++                return new BodyTree(rect);
++            }
++        }
++
+         public static class PhysicsBody implements QuadTreeObject{
+             public float x, y, radius, mass;
+             public boolean collided = false, local = true;
+diff --git a/core/src/mindustry/entities/EntityGroup.java b/core/src/mindustry/entities/EntityGroup.java
+index f8cf6f2b7996fed3f1906ab8153de24fcee6e1a8..12f51ee9424c579e65672cdac19e479e8fc9056d 100644
+--- a/core/src/mindustry/entities/EntityGroup.java
++++ b/core/src/mindustry/entities/EntityGroup.java
+@@ -250,7 +250,24 @@ public class EntityGroup<T extends Entityc> implements Iterable<T>{
+     }
+ 
+     private QuadTree newTree(Rect bounds){
+-        return array.items instanceof Unit[] ? new UnitTree(bounds) : new QuadTree<>(bounds);
++        return array.items instanceof Unit[] ? new UnitTree(bounds) : array.items instanceof Bullet[] ? new BulletTree(bounds) : new QuadTree<>(bounds);
++    }
++
++    /** Same hitbox as QuadTree, but its own call site: the shared one sees every tree's element type and is megamorphic. */
++    static class BulletTree extends QuadTree<Bullet>{
++        BulletTree(Rect bounds){
++            super(bounds);
++        }
++
++        @Override
++        protected void hitbox(Bullet bullet){
++            bullet.hitbox(tmp);
++        }
++
++        @Override
++        protected QuadTree<Bullet> newChild(Rect rect){
++            return new BulletTree(rect);
++        }
+     }
+ 
+     public Seq<T> rawSeq(){

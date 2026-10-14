@@ -1,0 +1,144 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 16:18:51 +0300
+Subject: [PATCH] OS(Pathfinder): refresh flow fields only when a cost can
+ change, sleep while paused
+
+---
+ core/src/mindustry/ai/ControlPathfinder.java  |  3 +-
+ core/src/mindustry/ai/Pathfinder.java         | 15 ++++-
+ .../src/test/java/PathfinderRefreshTests.java | 67 +++++++++++++++++++
+ 3 files changed, 81 insertions(+), 4 deletions(-)
+ create mode 100644 tests/src/test/java/PathfinderRefreshTests.java
+
+diff --git a/core/src/mindustry/ai/ControlPathfinder.java b/core/src/mindustry/ai/ControlPathfinder.java
+index 52606f7ae181d9ff1af05c2e11e01f84e4881d13..01e0cc34080656e195e4fd633c30f4125436a693 100644
+--- a/core/src/mindustry/ai/ControlPathfinder.java
++++ b/core/src/mindustry/ai/ControlPathfinder.java
+@@ -1628,7 +1628,8 @@ public class ControlPathfinder implements Runnable{
+                 }
+ 
+                 try{
+-                    Thread.sleep(updateInterval);
++                    //MDTX: nothing to path while paused or in the menu
++                    Thread.sleep(headless && !state.isPlaying() ? 250 : updateInterval);
+                 }catch(InterruptedException e){
+                     //stop looping when interrupted externally
+                     return;
+diff --git a/core/src/mindustry/ai/Pathfinder.java b/core/src/mindustry/ai/Pathfinder.java
+index 37b4a9e8115af7ea388311c85dafd61533c1c4c5..3cc632c096efdba6e5362158b711301d8ac8eaf5 100644
+--- a/core/src/mindustry/ai/Pathfinder.java
++++ b/core/src/mindustry/ai/Pathfinder.java
+@@ -306,19 +306,27 @@ public class Pathfinder implements Runnable{
+     public void updateTile(Tile tile){
+         if(net.client()) return;
+ 
++        costChanged = false;
+         tile.getLinkedTiles(t -> {
+             int pos = t.array();
+             if(pos < tiles.length){
+-                tiles[pos] = packTile(t);
++                int old = tiles[pos], packed = packTile(t), diff = old ^ packed;
++                //MDTX: vanilla costs read the team only on solid tiles, so a team change on a non-solid tile costs nothing
++                if(diff != 0 && ((diff & ~PathTile.bitMaskTeam) != 0 || PathTile.solid(old) || PathTile.solid(packed))) costChanged = true;
++                tiles[pos] = packed;
+             }
+         });
+ 
+         controlPath.updateTile(tile);
+ 
+         //queue a refresh sometime in the future
+-        needsRefresh = true;
++        //MDTX: on servers only when a cost can differ; conveyors, nodes and conduits being built or rotated change nothing for the flow fields
++        if(!headless || costChanged || costTypes.size != 6 || fieldTypes.size != 1 || state.rules.randomWaveAI) needsRefresh = true;
+     }
+ 
++    /** MDTX: set by updateTile when a packed tile changed in a way any vanilla cost function can see. */
++    private boolean costChanged;
++
+     /** Thread implementation. */
+     @Override
+     public void run(){
+@@ -343,7 +351,8 @@ public class Pathfinder implements Runnable{
+                 }
+ 
+                 try{
+-                    Thread.sleep(updateInterval);
++                    //MDTX: nothing to path while paused or in the menu; nine servers on two cores share these wakeups
++                    Thread.sleep(headless && !state.isPlaying() ? 250 : updateInterval);
+                 }catch(InterruptedException e){
+                     //stop looping when interrupted externally
+                     return;
+diff --git a/tests/src/test/java/PathfinderRefreshTests.java b/tests/src/test/java/PathfinderRefreshTests.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..0c194bff70f1191c37dfb0890f767d798b638199
+--- /dev/null
++++ b/tests/src/test/java/PathfinderRefreshTests.java
+@@ -0,0 +1,67 @@
++import arc.math.*;
++import arc.struct.*;
++import mindustry.ai.*;
++import mindustry.content.*;
++import mindustry.game.*;
++import mindustry.world.*;
++import org.junit.jupiter.api.*;
++
++import java.lang.reflect.*;
++
++import static mindustry.Vars.*;
++import static org.junit.jupiter.api.Assertions.*;
++
++/** The server skips a flow field refresh after a tile change only if no cost function can see the change. */
++public class PathfinderRefreshTests{
++
++    @BeforeAll
++    static void init(){
++        ApplicationTests.launchApplication();
++    }
++
++    @Test
++    void skippedRefreshMeansSameCosts() throws Exception{
++        world.loadMap(ApplicationTests.testMap);
++        Field tilesField = Pathfinder.class.getDeclaredField("tiles"), refresh = Pathfinder.class.getDeclaredField("needsRefresh");
++        tilesField.setAccessible(true);
++        refresh.setAccessible(true);
++
++        Block[] blocks = {Blocks.conveyor, Blocks.titaniumConveyor, Blocks.copperWall, Blocks.powerNode, Blocks.conduit, Blocks.air, Blocks.scrapWall, Blocks.junction};
++        Team[] teams = {Team.sharded, Team.crux, Team.derelict, Team.malis};
++        Rand r = new Rand(5);
++        int skipped = 0;
++
++        for(int i = 0; i < 3000; i++){
++            Tile tile = world.tile(r.random(5, world.width() - 6), r.random(5, world.height() - 6));
++            if(tile == null || tile.block() instanceof mindustry.world.blocks.storage.CoreBlock) continue;
++            //snapshot of the tile and its neighbours, which packTile can mark nearSolid
++            IntSeq positions = new IntSeq();
++            positions.add(tile.array());
++            for(int d = 0; d < 4; d++) if(tile.nearby(d) != null) positions.add(tile.nearby(d).array());
++            int[] tiles = (int[])tilesField.get(pathfinder);
++            int[] before = new int[positions.size];
++            for(int p = 0; p < positions.size; p++) before[p] = tiles[positions.get(p)];
++
++            refresh.setBoolean(pathfinder, false);
++            if(r.chance(0.5) && tile.build != null){
++                tile.setTeam(teams[r.random(teams.length - 1)]);
++                pathfinder.updateTile(tile);
++            }else{
++                tile.setBlock(blocks[r.random(blocks.length - 1)], teams[r.random(teams.length - 1)], r.random(3));
++            }
++
++            if(!refresh.getBoolean(pathfinder)){
++                skipped++;
++                tiles = (int[])tilesField.get(pathfinder);
++                for(int p = 0; p < positions.size; p++){
++                    for(var cost : Pathfinder.costTypes){
++                        for(Team team : Team.baseTeams){
++                            assertEquals(cost.getCost(team.id, before[p]), cost.getCost(team.id, tiles[positions.get(p)]), "change " + i + " skipped a refresh but a cost differs");
++                        }
++                    }
++                }
++            }
++        }
++        assertTrue(skipped > 100, "the test should exercise skipped refreshes, got " + skipped);
++    }
++}

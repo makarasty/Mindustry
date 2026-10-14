@@ -1,0 +1,100 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 16:18:51 +0300
+Subject: [PATCH] OG(BuilderAI): stop the assist scan at the first builder
+ found
+
+---
+ core/src/mindustry/ai/types/BuilderAI.java |  6 ++--
+ core/src/mindustry/entities/Units.java     |  8 +++++
+ tests/src/test/java/UnitTreeTests.java     | 36 ++++++++++++++++++++++
+ 3 files changed, 47 insertions(+), 3 deletions(-)
+
+diff --git a/core/src/mindustry/ai/types/BuilderAI.java b/core/src/mindustry/ai/types/BuilderAI.java
+index 44ad519ec462ebb92546a6cfc186086b43db5d5d..987b1959ffc2c9b01e513fd090884b6a494ab027 100644
+--- a/core/src/mindustry/ai/types/BuilderAI.java
++++ b/core/src/mindustry/ai/types/BuilderAI.java
+@@ -149,9 +149,8 @@ public class BuilderAI extends AIController{
+             if(timer.get(timerTarget2, 20f)){
+                 found = false;
+ 
+-                Units.nearby(unit.team, unit.x, unit.y, buildRadius, u -> {
+-                    if(found) return;
+-
++                //MDTX: stops at the first match; the old scan returned early for every unit after it
++                Units.nearbyCheck(unit.team, unit.x, unit.y, buildRadius, u -> {
+                     //plans first: a cheap field that activelyBuilding() requires anyway
+                     if(u != unit && u.plans.size != 0 && u.canBuild() && u.activelyBuilding()){
+                         BuildPlan plan = u.buildPlan();
+@@ -167,6 +166,7 @@ public class BuilderAI extends AIController{
+                             }
+                         }
+                     }
++                    return found;
+                 });
+ 
+                 if(onlyAssist){
+diff --git a/core/src/mindustry/entities/Units.java b/core/src/mindustry/entities/Units.java
+index 753b921c305f65c6bc5310335810ba6b6fbe33c7..aa193c8f5a246afcb061e9e7b3288fcc764b4797 100644
+--- a/core/src/mindustry/entities/Units.java
++++ b/core/src/mindustry/entities/Units.java
+@@ -484,6 +484,14 @@ public class Units{
+         return Groups.unit.intersect(x, y, width, height, cons);
+     }
+ 
++    /** MDTX: {@link #nearby(Team, float, float, float, Cons)} that stops once the predicate returns true. Team must not be null. */
++    public static boolean nearbyCheck(Team team, float x, float y, float radius, Boolf<Unit> pred){
++        return team.data().tree().intersect(x - radius, y - radius, radius*2f, radius*2f, (Boolf<Unit>)unit -> {
++            float dst = radius + unit.hitSize/2f;
++            return (UnitTree.plain ? Mathf.dst2(unit.x, unit.y, x, y) < dst*dst : unit.within(x, y, dst)) && pred.get(unit);
++        });
++    }
++
+     /** Iterates over all units in a rectangle. */
+     public static void nearby(Rect rect, Cons<Unit> cons){
+         nearby(rect.x, rect.y, rect.width, rect.height, cons);
+diff --git a/tests/src/test/java/UnitTreeTests.java b/tests/src/test/java/UnitTreeTests.java
+index 6b27a05eaea9f6388ce145bf85f122f176606e53..22a7547ea82c173dae48913d947bce11bbb17ad4 100644
+--- a/tests/src/test/java/UnitTreeTests.java
++++ b/tests/src/test/java/UnitTreeTests.java
+@@ -105,4 +105,40 @@ public class UnitTreeTests{
+             assertFalse(got.contains(u -> !expected.contains(u, true)), "query " + i);
+         }
+     }
++
++    @Test
++    void nearbyCheckStopsAtTheSameFirstMatch(){
++        world.loadMap(ApplicationTests.testMap);
++        state.rules.unitCap = 10000;
++        Rand r = new Rand(7);
++        Seq<UnitType> types = content.units().select(t -> !t.internal && t.useUnitCap);
++        float cx = world.unitWidth() / 2f, cy = world.unitHeight() / 2f;
++        for(int i = 0; i < 300; i++){
++            types.get(i % types.size).spawn(Team.sharded, cx + r.range(150f), cy + r.range(150f));
++        }
++        Groups.unit.update();
++        state.teams.updateTeamStats();
++
++        for(int i = 0; i < 200; i++){
++            float x = cx + r.range(200f), y = cy + r.range(200f), radius = r.random(150f);
++            int mod = r.random(1, 9);
++            Seq<Unit> order = new Seq<>();
++            Units.nearby(Team.sharded, x, y, radius, order::add);
++            Unit expected = order.find(u -> u.id % mod == 0);
++
++            Unit[] got = {null};
++            int[] calls = {0};
++            boolean found = Units.nearbyCheck(Team.sharded, x, y, radius, u -> {
++                calls[0]++;
++                if(u.id % mod == 0){
++                    got[0] = u;
++                    return true;
++                }
++                return false;
++            });
++            assertEquals(expected != null, found, "query " + i);
++            assertSame(expected, got[0], "query " + i);
++            assertEquals(expected == null ? order.size : order.indexOf(expected, true) + 1, calls[0], "query " + i + " must stop at the first match");
++        }
++    }
+ }

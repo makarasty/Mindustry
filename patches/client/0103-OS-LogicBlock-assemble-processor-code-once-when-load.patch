@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 16:41:01 +0300
+Subject: [PATCH] OS(LogicBlock): assemble processor code once when loading a
+ save
+
+---
+ core/src/mindustry/world/blocks/logic/LogicBlock.java | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/core/src/mindustry/world/blocks/logic/LogicBlock.java b/core/src/mindustry/world/blocks/logic/LogicBlock.java
+index 3a841400a3c872c3f95cd94cb4dfde79f67fc345..1f53394de33d66ea491452344c00cb37f809b831 100644
+--- a/core/src/mindustry/world/blocks/logic/LogicBlock.java
++++ b/core/src/mindustry/world/blocks/logic/LogicBlock.java
+@@ -338,7 +338,9 @@ public class LogicBlock extends Block{
+                     }
+                 }
+ 
+-                updateCode(new String(bytes, charset));
++                //MDTX: read() replaces this assembly with its own (loadBlock) before the processor first runs, so on servers only store the code
++                if(deferAssembly) code = new String(bytes, charset);
++                else updateCode(new String(bytes, charset));
+             }catch(Exception ignored){
+                 //invalid logic doesn't matter here
+             }
+@@ -894,6 +896,9 @@ public class LogicBlock extends Block{
+             write.f(accumulator);
+         }
+ 
++        /** MDTX: set while read() parses the code it assembles later anyway. */
++        private boolean deferAssembly;
++
+         public void checkReadCode(){
+             if(loadBlock != null){
+                 loadBlock.run();
+@@ -914,7 +919,9 @@ public class LogicBlock extends Block{
+                 int compl = read.i();
+                 byte[] bytes = new byte[compl];
+                 read.b(bytes);
++                deferAssembly = headless;
+                 readCompressed(bytes, false);
++                deferAssembly = false;
+             }else{
+                 code = read.str();
+                 links.clear();

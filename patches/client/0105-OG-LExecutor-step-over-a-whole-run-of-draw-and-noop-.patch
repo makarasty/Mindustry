@@ -1,0 +1,143 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 16:57:23 +0300
+Subject: [PATCH] OG(LExecutor): step over a whole run of draw and noop at once
+
+---
+ core/src/mindustry/logic/LExecutor.java       | 31 ++++++++---
+ .../world/blocks/logic/LogicBlock.java        |  5 +-
+ tests/src/test/java/LogicSkipTests.java       | 51 +++++++++++++++++++
+ 3 files changed, 78 insertions(+), 9 deletions(-)
+
+diff --git a/core/src/mindustry/logic/LExecutor.java b/core/src/mindustry/logic/LExecutor.java
+index 62175e7ed1848aa534e40c74296a78633e276c0a..6b56e2a5ce831d0a937efe9dc59e7e490c0ccdc0 100644
+--- a/core/src/mindustry/logic/LExecutor.java
++++ b/core/src/mindustry/logic/LExecutor.java
+@@ -125,6 +125,8 @@ public class LExecutor{
+ 
+     //MDTX: per instruction, whether running it changes nothing but the counter: noop, and draw on a headless server
+     private boolean[] noop;
++    /** MDTX: length of the run of skippable instructions starting at each index, up to the end of the program. */
++    private int[] noopRun;
+     private boolean anyNoop;
+     private LInstruction[] noopOf;
+ 
+@@ -138,20 +140,35 @@ public class LExecutor{
+                 Class<?> type = instructions[i].getClass();
+                 anyNoop |= noop[i] = type == NoopI.class || (headless && type == DrawI.class);
+             }
++            noopRun = new int[noop.length];
++            for(int i = noop.length - 1; i >= 0; i--){
++                noopRun[i] = noop[i] ? 1 + (i + 1 < noop.length ? noopRun[i + 1] : 0) : 0;
++            }
+         }
+         return anyNoop;
+     }
+ 
+-    /** MDTX: after prepareSkip(): if the next instruction does nothing, advances the counter exactly as runOnce() would and returns true. */
+-    public boolean skipNoop(){
++    /**
++     * MDTX: after prepareSkip(): steps over up to max skippable instructions in a row, exactly as that many runOnce() calls would,
++     * and returns how many. Whole steps keep the counter and the caller's float accumulator exact (both stay far below 2^24).
++     */
++    public int skipNoops(int max){
+         double c = counter.numval;
+         if(c >= noop.length || c < 0) c = 0;
+-        if(c < noop.length && noop[(int)c]){
+-            counter.isobj = false;
+-            counter.numval = c + 1;
+-            return true;
++        if(c < noop.length){
++            int n = Math.min(noopRun[(int)c], max);
++            if(n > 0){
++                counter.isobj = false;
++                counter.numval = c + n;
++                return n;
++            }
+         }
+-        return false;
++        return 0;
++    }
++
++    /** MDTX: after prepareSkip(): if the next instruction does nothing, advances the counter exactly as runOnce() would and returns true. */
++    public boolean skipNoop(){
++        return skipNoops(1) > 0;
+     }
+ 
+     /** Loads with a specified assembler. Resets all variables. */
+diff --git a/core/src/mindustry/world/blocks/logic/LogicBlock.java b/core/src/mindustry/world/blocks/logic/LogicBlock.java
+index 78ac44d525fc1738489117ac627bf036f18e4e01..6670da7d35a3f6d9556b4f02c45849c00e2891ff 100644
+--- a/core/src/mindustry/world/blocks/logic/LogicBlock.java
++++ b/core/src/mindustry/world/blocks/logic/LogicBlock.java
+@@ -598,8 +598,9 @@ public class LogicBlock extends Block{
+                 //MDTX: step over instructions that do nothing here without dispatching them (most player code is draw)
+                 boolean skip = executor.prepareSkip();
+                 while(accumulator >= 1f){
+-                    if(skip && executor.skipNoop()){
+-                        accumulator --;
++                    int skipped;
++                    if(skip && (skipped = executor.skipNoops((int)accumulator)) > 0){
++                        accumulator -= skipped;
+                         continue;
+                     }
+                     executor.runOnce();
+diff --git a/tests/src/test/java/LogicSkipTests.java b/tests/src/test/java/LogicSkipTests.java
+index d5f5ae2ea59f27e34472865e3ce1d1381d628a22..b5d288e4dba5f10f664b285e8c6829d09bdf1487 100644
+--- a/tests/src/test/java/LogicSkipTests.java
++++ b/tests/src/test/java/LogicSkipTests.java
+@@ -83,4 +83,55 @@ public class LogicSkipTests{
+         exec.load(LAssembler.assemble("op add n n 1", true));
+         assertFalse(exec.prepareSkip(), "nothing to skip");
+     }
++
++    /** LogicBuild.updateTile's loop with and without batch skipping, fractional per-tick increments, many ticks. */
++    @Test
++    void batchSkipMatchesTheProcessorLoop(){
++        Rand r = new Rand(11);
++        String[] programs = {
++            "draw clear 0 0 0\ndraw rect 0 0 1 1\ndraw rect 1 1 1 1\ndraw color 1 1 1 1\ndrawflush display1",
++            "op add n n 1\ndraw rect n 0 1 1\ndraw rect n 1 1 1\nnoop\njump 0 lessThan n 1000\nset @counter 2.5\ndraw clear 0 0 0",
++            "draw rect 0 0 1 1\nwait 0.1\ndraw rect 0 0 1 1\nop add n n 1",
++        };
++        for(String code : programs){
++            for(int trial = 0; trial < 20; trial++){
++                LExecutor plain = load(code), batch = load(code);
++                float accA = 0, accB = 0, ipt = r.random(1f, 40f);
++                for(int tick = 0; tick < 300; tick++){
++                    float add = r.random(0.2f, 1.5f) * ipt;
++                    while(accA >= 1f){
++                        plain.runOnce();
++                        if(plain.yield){
++                            plain.yield = false;
++                            break;
++                        }
++                        accA --;
++                    }
++                    accA += add;
++
++                    boolean skip = batch.prepareSkip();
++                    while(accB >= 1f){
++                        int skipped;
++                        if(skip && (skipped = batch.skipNoops((int)accB)) > 0){
++                            accB -= skipped;
++                            continue;
++                        }
++                        batch.runOnce();
++                        if(batch.yield){
++                            batch.yield = false;
++                            break;
++                        }
++                        accB --;
++                    }
++                    accB += add;
++
++                    assertEquals(Float.floatToRawIntBits(accA), Float.floatToRawIntBits(accB), "tick " + tick);
++                    for(int v = 0; v < plain.vars.length; v++){
++                        assertEquals(Double.doubleToRawLongBits(plain.vars[v].numval), Double.doubleToRawLongBits(batch.vars[v].numval), "tick " + tick + " " + plain.vars[v].name);
++                        assertEquals(plain.vars[v].isobj, batch.vars[v].isobj);
++                    }
++                }
++            }
++        }
++    }
+ }

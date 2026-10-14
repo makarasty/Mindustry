@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 15:59:33 +0300
+Subject: [PATCH] OG(Settings): putting an unchanged value does not mark
+ settings modified
+
+---
+ arc-core/src/arc/Settings.java | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arc-core/src/arc/Settings.java b/arc-core/src/arc/Settings.java
+index d190f9f510ec2fa0395debeada51e9608054ed02..7cbfee08d8fac9117a05d89d01eb2691c9f4bed5 100644
+--- a/arc-core/src/arc/Settings.java
++++ b/arc-core/src/arc/Settings.java
+@@ -443,8 +443,8 @@ public class Settings{
+     public synchronized void put(String name, Object object){
+         if(object instanceof Float || object instanceof Integer || object instanceof Boolean || object instanceof Long
+         || object instanceof String || object instanceof byte[]){
+-            values.put(name, object);
+-            modified = true;
++            //an unchanged value is nothing to save (byte[] compares by identity, so putJson still marks)
++            if(!object.equals(values.put(name, object))) modified = true;
+         }else{
+             throw new IllegalArgumentException("Invalid object stored: " + (object == null ? null : object.getClass()) + ".");
+         }

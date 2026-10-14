@@ -1,0 +1,65 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 16:18:50 +0300
+Subject: [PATCH] OG(ItemBridge): cache the linked building with the link
+ validation, plain loop for the mixed check
+
+---
+ .../world/blocks/distribution/ItemBridge.java  | 18 ++++++++++++++----
+ 1 file changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/core/src/mindustry/world/blocks/distribution/ItemBridge.java b/core/src/mindustry/world/blocks/distribution/ItemBridge.java
+index cfc8303cc9f1361b94669227492ad9fb990e668e..84c348b2303e874d9df66b92eb79e38cee4d84e4 100644
+--- a/core/src/mindustry/world/blocks/distribution/ItemBridge.java
++++ b/core/src/mindustry/world/blocks/distribution/ItemBridge.java
+@@ -39,6 +39,14 @@ public class ItemBridge extends Block{
+ 
+     /** MDTX: every bridge block, to detect mixed linkSameType content (see ItemBridgeBuild.validatedTopology). */
+     protected static final Seq<ItemBridge> all = new Seq<>();
++
++    /** MDTX: all.contains(b -> !b.linkSameType) as a plain loop; the lambda call site in Seq.contains is megamorphic. */
++    static boolean mixedLinkSameType(){
++        for(int i = 0; i < all.size; i++){
++            if(!all.get(i).linkSameType) return true;
++        }
++        return false;
++    }
+     public float arrowSpacing = 4f, arrowOffset = 2f, arrowPeriod = 0.4f;
+     public float arrowTimeScl = 6.2f;
+     public float bridgeWidth = 6.5f;
+@@ -221,6 +229,8 @@ public class ItemBridge extends Block{
+         public float transportCounter;
+         /** MDTX: {@link Tile#topologyVersion} of the last link validation. Validation only depends on blocks, teams and links, so it is skipped until one of them changes. */
+         protected long validatedTopology = -1;
++        /** MDTX: linked building at the last validation; Tile.build only changes in Tile.setBlock, which bumps the version. */
++        protected @Nullable Building linkBuild;
+ 
+         public void setLink(int link){
+             if(this.link == link) return;
+@@ -353,14 +363,14 @@ public class ItemBridge extends Block{
+ 
+             time += timeSpeed * delta();
+ 
+-            Tile other = world.tile(link);
+-
+             //bridges with different linkSameType disagree on link validity and re-add/remove each other every tick, so no caching then
+-            if(validatedTopology != Tile.topologyVersion || all.contains(b -> !b.linkSameType)){
++            if(validatedTopology != Tile.topologyVersion || mixedLinkSameType()){
+                 validatedTopology = Tile.topologyVersion;
+                 checkIncoming();
+ 
++                Tile other = world.tile(link);
+                 hadValidLink = linkValid(tile, other);
++                linkBuild = hadValidLink ? other.build : null;
+ 
+                 if(hadValidLink){
+                     var inc = ((ItemBridgeBuild)other.build).incoming;
+@@ -376,7 +386,7 @@ public class ItemBridge extends Block{
+                 warmup = 0f;
+             }else{
+                 warmup = Mathf.approachDelta(warmup, efficiency, 1f / 30f);
+-                updateTransport(other.build);
++                updateTransport(linkBuild);
+             }
+         }
+ 

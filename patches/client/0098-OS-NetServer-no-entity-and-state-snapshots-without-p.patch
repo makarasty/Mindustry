@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 16:18:51 +0300
+Subject: [PATCH] OS(NetServer): no entity and state snapshots without players
+
+---
+ core/src/mindustry/core/NetServer.java | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/core/src/mindustry/core/NetServer.java b/core/src/mindustry/core/NetServer.java
+index f13b978413b13d34d12c446ec8bdc212ebda9448..8f946684773db3a7d5cc12249b78d518fe81f23c 100644
+--- a/core/src/mindustry/core/NetServer.java
++++ b/core/src/mindustry/core/NetServer.java
+@@ -1318,7 +1318,8 @@ public class NetServer implements ApplicationListener{
+                 }
+             });
+ 
+-            if(Time.timeSinceMillis(snapshotSyncTime) >= interval){
++            //MDTX: nobody receives entity or state snapshots on an empty server; saves call beforeWrite() themselves
++            if(!(headless && Groups.player.isEmpty()) && Time.timeSinceMillis(snapshotSyncTime) >= interval){
+                 snapshotSyncTime = Time.millis();
+ 
+                 writeStateSnapshot();
