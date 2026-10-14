@@ -80,11 +80,11 @@ if [ "$hticks" -gt 0 ]; then
 fi
 
 if [ "$bticks" -gt 0 ]; then
-  for round in 1 2; do
+  for round in $(seq ${ROUNDS:-3}); do
     for v in base opt; do
       jar="$BASE"; [ $v = opt ] && jar=opt.jar
       echo "--- $v (round $round)"
-      "$J"java ${BENCH_OPTS:-} -Xmx6g -cp "cls$sep$jar" mindustry.ai.TickBench "$save" "$bticks" - 600 2>/dev/null | grep -E "TOTAL|stateUpdate|unitUpdate|powerUpdate|buildingUpdate|bulletUpdate"
+      "$J"java ${BENCH_OPTS:-} -Xmx${BENCH_XMX:-6g} -cp "cls$sep$jar" mindustry.ai.TickBench "$save" "$bticks" - 600 2>/dev/null | grep -E "^===|TOTAL|cpu|alloc|stateUpdate|unitUpdate|powerUpdate|buildingUpdate|bulletUpdate"
     done
   done
 fi

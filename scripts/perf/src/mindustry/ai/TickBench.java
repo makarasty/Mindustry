@@ -34,6 +34,7 @@ import static mindustry.Vars.*;
  * <pre>
  * run:  TickBench &lt;save.msav&gt; &lt;ticks&gt; [hashOut|-] [warmup]
  * gen:  TickBench gen &lt;out.msav&gt; &lt;schematicsDir&gt; &lt;seed&gt; &lt;mapSize&gt; &lt;targetBuilds&gt; [unitsPerTeam]
+ * scen: TickBench scen &lt;out.msav&gt; stack|war|logic &lt;n&gt; [seed]   (see ScenarioGen)
  * </pre>
  * Timing mode (hashOut = -) runs the server tick as is and prints per-phase mean/p50/p99.
  * Hash mode writes one world hash per tick and makes the run reproducible: fixed delta, seeded RNGs,
@@ -53,6 +54,9 @@ import static mindustry.Vars.*;
  * bench.typeHash=1       per-block-type hash per tick to &lt;hashOut&gt;.types
  * bench.traceTypes=a,b   per-tick field dump of these block types to &lt;hashOut&gt;.trace
  * bench.census=1, bench.diag=1  block census and link/graph histograms in the report
+ * bench.seed=1          timing mode with the same seeding and pathfinder stepping as hash mode, so both jars
+ *                        simulate the same battle; pathfinding then runs outside the timed part of the tick
+ * bench.config=a=1,b=2   set server configs (Administration.Config) after load, e.g. logicBudget=20000
  */
 public class TickBench implements ApplicationListener{
     static final PerfCounter[] counters = {PerfCounter.entityMisc, PerfCounter.unitUpdate, PerfCounter.powerUpdate, PerfCounter.buildingUpdate, PerfCounter.bulletUpdate};
@@ -62,6 +66,7 @@ public class TickBench implements ApplicationListener{
     static String[] genArgs;
 
     int tick = -1;
+    boolean deterministic;
     long[][] samples;
     long[] total, asyncWait, stateNs;
     PrintWriter hashWriter;
@@ -71,7 +76,7 @@ public class TickBench implements ApplicationListener{
     Method cpComplete, cpInner, cpFields, cpRecalc;
 
     public static void main(String[] args){
-        if(args[0].equals("gen")){
+        if(args[0].equals("gen") || args[0].equals("scen")){
             genArgs = args;
         }else{
             savePath = args[0];
@@ -109,11 +114,12 @@ public class TickBench implements ApplicationListener{
         Time.setDeltaProvider(() -> 1f);
 
         if(genArgs != null){
-            StressGen.generate(genArgs);
+            if(genArgs[0].equals("scen")) ScenarioGen.generate(genArgs);
+            else StressGen.generate(genArgs);
             System.exit(0);
         }
 
-        boolean deterministic = !hashOut.equals("-");
+        deterministic = !hashOut.equals("-") || System.getProperty("bench.seed") != null;
         try{
             gfxDelta = Class.forName("arc.mock.MockGraphics").getDeclaredField("deltaTime");
             pfQueue = Pathfinder.class.getDeclaredField("queue");
@@ -179,12 +185,23 @@ public class TickBench implements ApplicationListener{
                     f.setAccessible(true);
                     ((Rand)f.get(null)).setSeed(r[0].hashCode());
                 }
-                hashWriter = new PrintWriter(new FileWriter(hashOut));
+                if(!hashOut.equals("-")) hashWriter = new PrintWriter(new FileWriter(hashOut));
             }catch(Exception e){
                 throw new RuntimeException(e);
             }
         }
         Mathf.rand.setSeed(42);
+
+        String configs = System.getProperty("bench.config");
+        if(configs != null){
+            for(String kv : configs.split(",")){
+                String[] p = kv.split("=");
+                var config = mindustry.net.Administration.Config.all.find(c -> c.name.equals(p[0]));
+                if(config == null) throw new IllegalArgumentException("no config " + p[0]);
+                config.set(config.isNum() ? (Object)Integer.parseInt(p[1]) : config.isBool() ? (Object)Boolean.parseBoolean(p[1]) : p[1]);
+                Log.info("config @ = @", p[0], config.get());
+            }
+        }
 
         Log.info("Loaded @: @x@, builds=@, units=@, graphs=@", savePath, world.width(), world.height(), Groups.build.size(), Groups.unit.size(), Groups.powerGraph.size());
 
@@ -210,12 +227,13 @@ public class TickBench implements ApplicationListener{
 
         int t = tick - warmup;
 
-        if(hashWriter != null){
+        if(deterministic){
             stepPathfinder();
             stepControlPath();
         }
         if(chaosEvery > 0 && tick % chaosEvery == 0) chaos();
 
+        if(t == 0) startCounters();
         long s = Time.nanos();
         asyncCore.begin();
         long a = Time.nanos();
@@ -333,13 +351,41 @@ public class TickBench implements ApplicationListener{
     //endregion
     //region report
 
+    long allocStart, gcCountStart, gcMsStart, cpuStart;
+    final com.sun.management.ThreadMXBean threads = (com.sun.management.ThreadMXBean)java.lang.management.ManagementFactory.getThreadMXBean();
+
+    long gcCount(){
+        long c = 0;
+        for(var gc : java.lang.management.ManagementFactory.getGarbageCollectorMXBeans()) c += gc.getCollectionCount();
+        return c;
+    }
+
+    long gcMs(){
+        long c = 0;
+        for(var gc : java.lang.management.ManagementFactory.getGarbageCollectorMXBeans()) c += gc.getCollectionTime();
+        return c;
+    }
+
+    /** Main-thread allocation and GC totals over the measured ticks; worker threads (physics, pathfinder) are not counted. */
+    void startCounters(){
+        allocStart = threads.getCurrentThreadAllocatedBytes();
+        cpuStart = threads.getCurrentThreadCpuTime();
+        gcCountStart = gcCount();
+        gcMsStart = gcMs();
+    }
+
     void report(){
         StringBuilder sb = new StringBuilder();
         String nl = System.lineSeparator();
         if(System.getProperty("bench.diag") != null){
             IntIntMap links = new IntIntMap(), incoming = new IntIntMap(), graphs = new IntIntMap();
-            int nullUnloaders = 0, unloaders = 0;
+            int nullUnloaders = 0, unloaders = 0, procs = 0, procsRunning = 0, procsPowered = 0;
             for(Building b : Groups.build){
+                if(b instanceof LogicBlock.LogicBuild l){
+                    procs++;
+                    if(l.efficiency > 0) procsPowered++;
+                    if(l.executor.counter.numval != 0) procsRunning++;
+                }
                 if(b instanceof LogicBlock.LogicBuild l) links.increment(Math.min(l.links.size, 64) / 8 * 8);
                 if(b instanceof ItemBridge.ItemBridgeBuild ib) incoming.increment(ib.incoming.size);
                 if(b instanceof Unloader.UnloaderBuild u){
@@ -350,6 +396,7 @@ public class TickBench implements ApplicationListener{
             for(var g : Groups.powerGraph) graphs.increment(Math.min(((PowerGraphUpdater)g).graph.all.size, 1024) / 16 * 16);
             sb.append("logic links hist(bucket8): ").append(links).append(nl)
                 .append("bridge incoming hist: ").append(incoming).append(nl)
+                .append("processors: ").append(procs).append(" powered: ").append(procsPowered).append(" counter!=0: ").append(procsRunning).append(" damaged units: ").append(Groups.unit.count(u -> u.damaged())).append(" logic-controlled units: ").append(Groups.unit.count(u -> u.controller() instanceof mindustry.ai.types.LogicAI)).append(nl)
                 .append("unloaders: ").append(unloaders).append(" null: ").append(nullUnloaders).append(nl)
                 .append("power graph size hist(bucket16): ").append(graphs).append(nl);
         }
@@ -366,10 +413,19 @@ public class TickBench implements ApplicationListener{
             keys.sort(k -> -census.get(k));
             for(String k : keys.list().subList(0, Math.min(30, keys.size))) sb.append(k).append(' ').append(census.get(k)).append(nl);
         }
-        sb.append(nl).append(Strings.format("=== @ ticks (after @ warmup) | builds=@ units=@ bullets=@ graphs=@", ticks, warmup, Groups.build.size(), Groups.unit.size(), Groups.bullet.size(), Groups.powerGraph.size())).append(nl);
-        sb.append(String.format("%-16s %9s %9s %9s %9s", "phase", "mean ms", "p50 ms", "p99 ms", "share")).append(nl);
+        String plain;
+        try{
+            plain = String.valueOf(Class.forName("mindustry.game.Teams$UnitTree").getField("plain").get(null));
+        }catch(Exception e){
+            plain = "n/a";
+        }
+        sb.append(nl).append(Strings.format("=== @ ticks (after @ warmup) | builds=@ units=@ bullets=@ graphs=@ unitTree.plain=@", ticks, warmup, Groups.build.size(), Groups.unit.size(), Groups.bullet.size(), Groups.powerGraph.size(), plain)).append(nl);
+        sb.append(String.format("%-16s %9s %9s %9s %9s %9s", "phase", "mean ms", "p50 ms", "p95 ms", "p99 ms", "share")).append(nl);
         double totalMean = mean(total);
         row(sb, "TOTAL", total, totalMean);
+        //main-thread CPU time is less sensitive to other load on the machine than the wall-clock phases
+        sb.append(String.format("%-16s %9.3f ms/tick main thread (includes bench overhead)", "cpu", (threads.getCurrentThreadCpuTime() - cpuStart) / 1e6 / ticks)).append(nl);
+        sb.append(String.format("%-16s %9.1f KB/tick main thread | gc %d collections, %d ms", "alloc", (threads.getCurrentThreadAllocatedBytes() - allocStart) / 1024.0 / ticks, gcCount() - gcCountStart, gcMs() - gcMsStart)).append(" (gc is process-wide)").append(nl);
         row(sb, "stateUpdate(etc)", stateNs, totalMean);
         row(sb, "asyncWait", asyncWait, totalMean);
         for(int i = 0; i < counters.length; i++){
@@ -388,7 +444,7 @@ public class TickBench implements ApplicationListener{
         long[] c = arr.clone();
         Arrays.sort(c);
         double m = mean(arr);
-        sb.append(String.format("%-16s %9.3f %9.3f %9.3f %8.1f%%", name, m / 1e6, c[c.length / 2] / 1e6, c[(int)(c.length * 0.99)] / 1e6, m / totalMean * 100)).append(System.lineSeparator());
+        sb.append(String.format("%-16s %9.3f %9.3f %9.3f %9.3f %8.1f%%", name, m / 1e6, c[c.length / 2] / 1e6, c[(int)(c.length * 0.95)] / 1e6, c[(int)(c.length * 0.99)] / 1e6, m / totalMean * 100)).append(System.lineSeparator());
     }
 
     //endregion

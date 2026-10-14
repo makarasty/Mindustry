@@ -6,6 +6,11 @@ Nothing here is part of the Gradle build; it compiles against a built `server-re
 - `src/mindustry/ai/TickBench.java` loads a save headless and runs ticks. Timing mode prints mean/p50/p99
   per `PerfCounter` phase. Hash mode writes a world hash per tick and makes the run reproducible.
 - `src/mindustry/ai/StressGen.java` builds a synthetic late-game save from a folder of schematics.
+- `src/mindustry/ai/ScenarioGen.java` builds sandbox saves without schematics: `stack` (a pile of mixed units),
+  `stack1` (a pile of daggers), `war` (two armies and wall lines that get rebuilt), `logic` (hyper processors in
+  unit control loops plus world processors at setrate 1000), `spawn` (world processors spawning units, for the
+  `maxTeamUnits` limit).
+- `jfrtop.py` prints self and inclusive time of the hottest methods, allocation sites, and `callers <frame>`.
 - `ab.sh` runs a baseline jar and a patched jar on the same save: hash traces must be identical, then timing.
 - `mutate.sh` breaks an optimization and expects `ab.sh` to fail. Use it to check that the scenario
   actually exercises the code you changed.
@@ -22,6 +27,7 @@ SCHEMS=/path/to/schematics   # e.g. %APPDATA%/Mindustry/schematics
 cd scripts/perf/run
 java -cp "cls:$BASEJAR" mindustry.ai.TickBench gen stressA.msav "$SCHEMS" 1 800 120000        # building-heavy
 java -cp "cls:$BASEJAR" mindustry.ai.TickBench gen stressC.msav "$SCHEMS" 2 500 15000 1500   # 1500 units per team fighting
+java -cp "cls:$BASEJAR" mindustry.ai.TickBench scen scen_stack.msav stack 2000   # also stack1, war 1500, logic 2000, spawn 20
 cd -
 
 # 1200 ticks of hash comparison with a random world mutation every tick, then 3000 timed ticks
@@ -35,7 +41,14 @@ HASH_OPTS="-Dbench.chaos=2 -Dbench.chaosActions=0,1,5 -Dbench.schems=$SCHEMS" \
 
 Use `;` instead of `:` in `-cp` on Windows. `ab.sh` options: `HASH_OPTS` (hash runs only),
 `BENCH_OPTS` (timing runs only; keep chaos out, it defeats every cache), `HASH_XMX` (default 4g per run),
-`SEQUENTIAL=1` (hash runs one after another, for small machines).
+`BENCH_XMX` (default 6g), `ROUNDS` (timing rounds per jar, default 3), `SEQUENTIAL=1` (hash runs one after
+another, for small machines).
+
+Timing runs on unit saves should use `BENCH_OPTS=-Dbench.seed=1`: without it physics and pathfinding are
+seeded differently in each JVM, and two jars end up timing different battles. The report prints `cpu`
+(main-thread CPU time, steadier than wall clock on a shared machine; physics threads are not in it), main-thread
+allocation, process-wide GC, and `unitTree.plain` (whether the unit quadtree fast path is on; `n/a` on jars
+without it). `-Dbench.config=logicBudget=5000,maxTeamUnits=150` sets server configs for a run.
 Exit codes: 0 ok, 1 usage/setup, 2 hash mismatch, 3 only the opt run crashed, 4 the base run crashed.
 
 Profile with `java -XX:StartFlightRecording=filename=x.jfr,settings=profile -cp ... TickBench <save> 2400 - 1200`,
@@ -80,3 +93,17 @@ together; inverted unloader pre-check; battery sum and graph capacity off by 0.0
 Single processor guards survive alone because they overlap, which is intended.
 The mixed-`linkSameType` guard is not killed by the random chaos (it needs a dumping bridge next to a
 bridge of another type); with the guard the bridge runs the original per-tick code.
+
+## Mutation matrix for patches 0083-0085
+
+Run with `mutate.sh <save> <ticks> <file> <old> <new>` on saves made by `ScenarioGen`:
+
+| File | `<old>` | `<new>` | Killed on |
+|---|---|---|---|
+| `core/src/mindustry/game/Teams.java` | `tmp.setCentered(unit.x, unit.y, unit.hitSize, unit.hitSize)` | `tmp.setCentered(unit.x, unit.y, unit.hitSize/2f, unit.hitSize/2f)` | war, 900 |
+| `core/src/mindustry/entities/abilities/RepairFieldAbility.java` | `other.health < other.maxHealth - 0.001f` | `other.health < other.maxHealth - 50f` | war, 900 |
+| `core/src/mindustry/ai/types/BuilderAI.java` | `u.canBuild() && u.activelyBuilding()){` | `u.canBuild() && true){` | stack, 1500 |
+| `core/src/mindustry/entities/Units.java` | `< dst*dst :` | `< radius*radius :` | stack, 1500 |
+| `core/src/mindustry/game/Teams.java` | `plain = result;` | `plain = false;` | control: must survive |
+
+`stack` needs its pending rebuild plans (generated since this matrix) for the builder and distance mutants.
