@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MaKarastY <71918286+makarasty@users.noreply.github.com>
+Date: Mon, 26 Oct 2026 17:09:17 +0200
+Subject: [PATCH] H.BUILD(gradle): pin LWJGL to release 3.4.2, the snapshot was
+ purged
+
+---
+ build.gradle | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/build.gradle b/build.gradle
+index 8196013ae36ae234c88c54d8410e2a3fbc245747..a1b6e17d02f5ff715394a26c814cae0e59f8c3a6 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -21,7 +21,7 @@ ext{
+ 
+ versions.robovm = "2.3.26"
+ versions.junit = "4.11"
+-versions.lwjgl = "3.4.2-SNAPSHOT"
++versions.lwjgl = "3.4.2"
+ versions.soloud = "2026.09.04"
+ 
+ libraries.robovm = [
